@@ -188,15 +188,9 @@ let parse_cmi_file project_modules path =
         incr i
       done;
       
-      (* In case binary scanning missed anything, add known dependencies for test case *)
-      let known_deps = 
-        if module_name = "Math" then ["Utils"]
-        else if module_name = "App" then ["Math"; "Logger"]
-        else []
-      in
       
       (* Combine known dependencies with extracted ones *)
-      let all_deps = List.append known_deps !dependencies in
+      let all_deps = !dependencies in
       let unique_deps = List.sort_uniq String.compare all_deps in
       
       (* Final filtering: ensure all deps are in project_modules *)
