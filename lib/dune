@@ -1,0 +1,6 @@
+(library
+ (name rescriptdep)
+ (flags
+  (:standard -w -27))
+ (public_name rescriptdep)
+ (libraries str))
