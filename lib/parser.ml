@@ -140,7 +140,7 @@ module DependencyExtractor = struct
         extract_module_from_path p1
 
   (* Read source file and check if a module is actually used in the code *)
-  let is_module_used_in_source source_file module_name =
+  let is_module_used_in_source ?(verbose = false) source_file module_name =
     if not (Sys.file_exists source_file) then true
       (* If source file doesn't exist, conservatively return true *)
     else
@@ -184,19 +184,21 @@ module DependencyExtractor = struct
         in
 
         if is_used then
-          Printf.printf "Module %s is actually used in %s\n" module_name
-            source_file
-        else
-          Printf.printf "Module %s is not used in source %s\n" module_name
-            source_file;
+          if verbose then
+            Printf.printf "Module %s is actually used in %s\n" module_name
+              source_file
+          else if verbose then
+            Printf.printf "Module %s is not used in source %s\n" module_name
+              source_file;
 
         is_used
       with _ ->
-        Printf.printf "Error reading source file %s\n" source_file;
+        if verbose then
+          Printf.printf "Error reading source file %s\n" source_file;
         true (* In case of file reading failure, conservatively return true *)
 
   (* Extract dependencies from cmt_info structure *)
-  let extract_dependencies_from_cmt_info cmt_info =
+  let extract_dependencies_from_cmt_info ?(verbose = false) cmt_info =
     let deps = ref [] in
 
     (* Check source file path *)
@@ -246,11 +248,14 @@ module DependencyExtractor = struct
           (* Return the first existing file or use the original path *)
           try List.find Sys.file_exists candidates
           with Not_found ->
-            Printf.printf "Source file not found for %s, using cmt path\n" path;
+            if verbose then
+              Printf.printf "Source file not found for %s, using cmt path\n"
+                path;
             path)
       | None ->
-          Printf.printf "No source file info in cmt for %s\n"
-            cmt_info.Cmt_format.cmt_modname;
+          if verbose then
+            Printf.printf "No source file info in cmt for %s\n"
+              cmt_info.Cmt_format.cmt_modname;
           "" (* No source file information available *)
     in
 
@@ -262,7 +267,7 @@ module DependencyExtractor = struct
              is_valid_module_name module_name
              && (not (is_stdlib_or_internal_module module_name))
              && (source_file = ""
-                || is_module_used_in_source source_file module_name)
+                || is_module_used_in_source ~verbose source_file module_name)
            then deps := module_name :: !deps)
          cmt_info.Cmt_format.cmt_imports
      with _ -> ());
@@ -272,7 +277,7 @@ module DependencyExtractor = struct
 end
 
 (* Find the implementation file using various strategies *)
-let find_implementation_file cmt_path =
+let find_implementation_file ?(verbose = false) cmt_path =
   (* Try to find .re or .res file by replacing .cmt extension *)
   let base_path = Filename.remove_extension cmt_path in
   let dir_path = Filename.dirname cmt_path in
@@ -341,9 +346,10 @@ let find_implementation_file cmt_path =
     remove_dups [] search_dirs
   in
 
-  Printf.printf "Search directory list:\n";
-  Printf.printf "Search directory list:\n";
-  List.iter (fun dir -> Printf.printf "  - %s\n" dir) unique_dirs;
+  if verbose then Printf.printf "Search directory list:\n";
+  if verbose then Printf.printf "Search directory list:\n";
+  if verbose then
+    List.iter (fun dir -> Printf.printf "  - %s\n" dir) unique_dirs;
 
   (* Create target file list from each directory *)
   let build_candidates dirs base exts =
@@ -371,30 +377,34 @@ let find_implementation_file cmt_path =
       [] name_patterns
   in
 
-  Printf.printf "Module: %s, number of search paths: %d\n" module_name
-    (List.length candidates);
-  Printf.printf "Module: %s, number of search paths: %d\n" module_name
-    (List.length candidates);
+  if verbose then
+    Printf.printf "Module: %s, number of search paths: %d\n" module_name
+      (List.length candidates);
+  if verbose then
+    Printf.printf "Module: %s, number of search paths: %d\n" module_name
+      (List.length candidates);
 
   (* Return the first existing file from candidates *)
   try
     let found = List.find Sys.file_exists candidates in
-    Printf.printf "Implementation file found: %s\n" found;
-    Printf.printf "Implementation file found: %s\n" found;
+    if verbose then Printf.printf "Implementation file found: %s\n" found;
+    if verbose then Printf.printf "Implementation file found: %s\n" found;
     Some found
   with Not_found ->
-    Printf.printf "Implementation file not found\n";
-    Printf.printf "Implementation file not found\n";
+    if verbose then Printf.printf "Implementation file not found\n";
+    if verbose then Printf.printf "Implementation file not found\n";
     None
 
 (* Parse a cmt file and extract module information *)
-let parse_cmt_file path =
+let parse_cmt_file ?(verbose = false) path =
   let module_name =
     Filename.basename path |> Filename.remove_extension |> normalize_module_name
   in
 
-  Printf.printf "Analyzing module: %s (file: %s)\n" module_name path;
-  Printf.printf "Analyzing module: %s (file: %s)\n" module_name path;
+  if verbose then
+    Printf.printf "Analyzing module: %s (file: %s)\n" module_name path;
+  if verbose then
+    Printf.printf "Analyzing module: %s (file: %s)\n" module_name path;
 
   try
     (* Use Cmt_format to read the file - with relaxed format checking *)
@@ -402,8 +412,10 @@ let parse_cmt_file path =
       try Cmt_format.read_cmt path
       with Cmt_format.Error msg ->
         (* Provide more detailed error information *)
-        Printf.printf
-          "Warning: Problem with CMT file %s: %s (continuing anyway)\n" path msg;
+        if verbose then
+          Printf.printf
+            "Warning: Problem with CMT file %s: %s (continuing anyway)\n" path
+            msg;
 
         (* Create basic information even if there's a problem to continue processing *)
         {
@@ -425,7 +437,7 @@ let parse_cmt_file path =
 
     (* Extract dependencies using only the parsed cmt_info *)
     let dependencies =
-      DependencyExtractor.extract_dependencies_from_cmt_info cmt_info
+      DependencyExtractor.extract_dependencies_from_cmt_info ~verbose cmt_info
     in
 
     (* Filter out self-references and normalize *)
@@ -439,7 +451,7 @@ let parse_cmt_file path =
     in
 
     (* Create the module info *)
-    let impl_file = find_implementation_file path in
+    let impl_file = find_implementation_file ~verbose path in
 
     (* Set file path to implementation file, or .cmt file if not found *)
     let file_path =
@@ -464,7 +476,7 @@ let parse_cmt_file path =
            (Printf.sprintf "Error parsing %s: %s" path (Printexc.to_string e)))
 
 (* Get the list of all project modules using recursive scanning *)
-let get_project_modules paths =
+let get_project_modules ?(verbose = false) paths =
   let project_modules = ref [] in
   let visited_dirs = Hashtbl.create 50 in
 
@@ -505,10 +517,11 @@ let get_project_modules paths =
   !project_modules
 
 (* Parse a list of files or directories *)
-let parse_files_or_dirs paths =
+let parse_files_or_dirs ?(verbose = false) paths =
   (* First get the list of all project modules (recursively) *)
-  let project_modules = get_project_modules paths in
-  Printf.printf "Project modules: %s\n" (String.concat ", " project_modules);
+  let project_modules = get_project_modules ~verbose paths in
+  if verbose then
+    Printf.printf "Project modules: %s\n" (String.concat ", " project_modules);
 
   let rec process accum = function
     | [] -> accum
@@ -518,7 +531,7 @@ let parse_files_or_dirs paths =
           process accum (cmt_files @ rest)
         else if Filename.check_suffix path ".cmt" then (
           try
-            let module_info = parse_cmt_file path in
+            let module_info = parse_cmt_file ~verbose path in
             (* Filter dependencies to only include project modules *)
             let filtered_deps =
               List.filter

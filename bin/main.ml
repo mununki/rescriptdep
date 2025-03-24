@@ -40,6 +40,7 @@ let spec_list =
     ( "--module",
       Arg.String (fun s -> focus_module := Some s),
       "Focus on specific module and its dependencies" );
+    ("-v", Arg.Set verbose, "Enable verbose output");
     ("--verbose", Arg.Set verbose, "Enable verbose output");
   ]
 
@@ -60,7 +61,9 @@ let main () =
 
   try
     (* Parse files and directories to get module infos *)
-    let module_infos = Rescriptdep.Parser.parse_files_or_dirs !input_files in
+    let module_infos =
+      Rescriptdep.Parser.parse_files_or_dirs ~verbose:!verbose !input_files
+    in
 
     (* Build dependency graph *)
     let graph =
