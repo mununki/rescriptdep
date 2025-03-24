@@ -123,7 +123,7 @@ let rec scan_directory_recursive dir =
 (* Use recursive directory scanning *)
 let scan_directory = scan_directory_recursive
 
-(* Module dependency analysis using typedtree *)
+(* Extract dependencies using the cmt_info structure *)
 module DependencyExtractor = struct
   (* Extract module names from paths in the typedtree *)
   let rec extract_module_from_path path =
@@ -138,51 +138,20 @@ module DependencyExtractor = struct
         (* For path applications, we'll use the first path *)
         extract_module_from_path p1
 
-  (* Process a structure for dependencies *)
-  let process_structure structure =
+  (* Extract dependencies from cmt_info structure *)
+  let extract_dependencies_from_cmt_info cmt_info =
     let deps = ref [] in
 
-    (* This is a simplified version that would normally analyze the full structure *)
-    (* Instead, we'll directly analyze the binary file to extract module names *)
-    !deps
-
-  (* Extract dependencies from a CMT file *)
-  let extract_dependencies ic =
-    (* Read entire file content *)
-    let pos = pos_in ic in
-    seek_in ic 0;
-    let len = in_channel_length ic in
-    let content = really_input_string ic len in
-    seek_in ic pos;
-
-    (* Extract potential module names from the binary content *)
-    let deps = ref [] in
-    let i = ref 0 in
-
-    while !i < len - 1 do
-      (* Look for capital letters that might start module names *)
-      if content.[!i] >= 'A' && content.[!i] <= 'Z' then (
-        let start = !i in
-        (* Extract potential identifier *)
-        while
-          !i < len
-          && ((content.[!i] >= 'A' && content.[!i] <= 'Z')
-             || (content.[!i] >= 'a' && content.[!i] <= 'z')
-             || (content.[!i] >= '0' && content.[!i] <= '9')
-             || content.[!i] = '_'
-             || content.[!i] = '\'')
-        do
-          incr i
-        done;
-
-        if !i > start + 1 then
-          let name = String.sub content start (!i - start) in
-          (* Only add if it looks like a valid module name and not stdlib *)
-          if
-            is_valid_module_name name && not (is_stdlib_or_internal_module name)
-          then deps := name :: !deps);
-      incr i
-    done;
+    (* Extract module names directly from imports list *)
+    (try
+       List.iter
+         (fun (module_name, _) ->
+           if
+             is_valid_module_name module_name
+             && not (is_stdlib_or_internal_module module_name)
+           then deps := module_name :: !deps)
+         cmt_info.Cmt_format.cmt_imports
+     with _ -> ());
 
     (* Return unique dependencies *)
     List.sort_uniq String.compare !deps
@@ -221,10 +190,10 @@ let parse_cmt_file path =
         }
     in
 
-    (* Extract dependencies using binary analysis *)
-    let ic = open_in_bin path in
-    let dependencies = DependencyExtractor.extract_dependencies ic in
-    close_in ic;
+    (* Extract dependencies using only the parsed cmt_info *)
+    let dependencies =
+      DependencyExtractor.extract_dependencies_from_cmt_info cmt_info
+    in
 
     (* Filter out self-references and normalize *)
     let filtered_deps =
