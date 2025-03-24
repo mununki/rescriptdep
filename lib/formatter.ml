@@ -14,19 +14,6 @@ let rec output_graph format graph out_channel =
   | Dot -> output_dot graph out_channel
   | Json -> output_json graph out_channel
 
-(* Helper to format location as JSON *)
-and format_loc_as_json loc =
-  match loc with
-  | Some loc_info ->
-      let line_json = string_of_int loc_info.Dependency_graph.line in
-      let column_json =
-        match loc_info.Dependency_graph.column with
-        | Some col -> ", \"column\": " ^ string_of_int col
-        | None -> ""
-      in
-      "{\n        \"line\": " ^ line_json ^ column_json ^ "\n      }"
-  | None -> "null"
-
 (* Output as Graphviz DOT format *)
 and output_dot graph out_channel =
   let modules = Dependency_graph.get_modules graph in
@@ -41,24 +28,7 @@ and output_dot graph out_channel =
   List.iter
     (fun module_name ->
       let path = Dependency_graph.get_module_path graph module_name in
-      let loc = Dependency_graph.get_module_loc graph module_name in
       let label_parts = [ module_name ] in
-
-      (* Add LOC info if available *)
-      let label_parts =
-        match loc with
-        | Some loc_info ->
-            let loc_str =
-              "LOC: " ^ string_of_int loc_info.Dependency_graph.line
-            in
-            let loc_str =
-              match loc_info.Dependency_graph.column with
-              | Some col -> loc_str ^ ":" ^ string_of_int col
-              | None -> loc_str
-            in
-            label_parts @ [ loc_str ]
-        | None -> label_parts
-      in
 
       (* Create label with metadata *)
       let label = String.concat "\\n" label_parts in
@@ -123,7 +93,6 @@ and output_json graph out_channel =
       let deps = Dependency_graph.get_dependencies graph module_name in
       let dependents = Dependency_graph.find_dependents graph module_name in
       let path = Dependency_graph.get_module_path graph module_name in
-      let loc = Dependency_graph.get_module_loc graph module_name in
 
       output_string out_channel "    {\n";
       output_string out_channel ("      \"name\": \"" ^ module_name ^ "\",\n");
@@ -134,10 +103,6 @@ and output_json graph out_channel =
           output_string out_channel ("      \"path\": \"" ^ path_str ^ "\",\n")
       | None -> output_string out_channel "      \"path\": null,\n");
 
-      (* Add LOC info if available *)
-      output_string out_channel
-        ("      \"loc\": " ^ format_loc_as_json loc ^ ",\n");
-
       (* Dependencies - modules this module depends on *)
       output_string out_channel "      \"dependencies\": [";
 
@@ -146,7 +111,6 @@ and output_json graph out_channel =
         List.iteri
           (fun j dep ->
             let dep_path = Dependency_graph.get_module_path graph dep in
-            let dep_loc = Dependency_graph.get_module_loc graph dep in
             output_string out_channel "        {\n";
             output_string out_channel ("          \"name\": \"" ^ dep ^ "\"");
 
@@ -156,23 +120,6 @@ and output_json graph out_channel =
                 output_string out_channel
                   (",\n          \"path\": \"" ^ path_str ^ "\"")
             | None -> output_string out_channel ",\n          \"path\": null");
-
-            (* Add dependency LOC if available *)
-            output_string out_channel
-              (",\n          \"loc\": "
-              ^
-              match dep_loc with
-              | Some loc_info ->
-                  let line_json =
-                    string_of_int loc_info.Dependency_graph.line
-                  in
-                  let column_json =
-                    match loc_info.Dependency_graph.column with
-                    | Some col -> ", \"column\": " ^ string_of_int col
-                    | None -> ""
-                  in
-                  "{\"line\": " ^ line_json ^ column_json ^ "}"
-              | None -> "null");
 
             output_string out_channel "\n        }";
             if j < List.length deps - 1 then output_string out_channel ",\n"
@@ -202,23 +149,6 @@ and output_json graph out_channel =
                 output_string out_channel
                   (",\n          \"path\": \"" ^ path ^ "\"")
             | _ -> output_string out_channel ",\n          \"path\": null");
-
-            (* Add dependent LOC if available *)
-            output_string out_channel
-              (",\n          \"loc\": "
-              ^
-              match dependent_metadata with
-              | { loc = Some loc_info; _ } ->
-                  let line_json =
-                    string_of_int loc_info.Dependency_graph.line
-                  in
-                  let column_json =
-                    match loc_info.Dependency_graph.column with
-                    | Some col -> ", \"column\": " ^ string_of_int col
-                    | None -> ""
-                  in
-                  "{\"line\": " ^ line_json ^ column_json ^ "}"
-              | _ -> "null");
 
             output_string out_channel "\n        }";
             if j < List.length dependents - 1 then

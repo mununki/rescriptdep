@@ -1,8 +1,5 @@
 open Stdlib
 
-(* Location information type definition *)
-type location = { line : int; column : int option }
-
 (* Module info representation *)
 type module_info = {
   name : string;
@@ -10,7 +7,6 @@ type module_info = {
   interface_digest : Digest.t option;
   implementation_digest : Digest.t option;
   file_path : string option;
-  loc : location option;
 }
 
 (* Exceptions *)
@@ -161,24 +157,6 @@ module DependencyExtractor = struct
     (* Return unique dependencies *)
     List.sort_uniq String.compare !deps
 end
-
-(* Count lines of code in a file and find the maximum column width *)
-let count_lines_in_file filename =
-  try
-    let ic = open_in filename in
-    let rec count_lines count max_column =
-      match input_line ic with
-      | line ->
-          let line_length = String.length line in
-          let new_max_column = max max_column line_length in
-          count_lines (count + 1) new_max_column
-      | exception End_of_file ->
-          close_in ic;
-          (count, max_column)
-    in
-    let line_count, max_column = count_lines 0 0 in
-    Some { line = line_count; column = Some max_column }
-  with _ -> None
 
 (* Find the implementation file using various strategies *)
 let find_implementation_file cmt_path =
@@ -349,24 +327,7 @@ let parse_cmt_file path =
 
     (* Create the module info *)
     let impl_file = find_implementation_file path in
-    let loc =
-      match impl_file with
-      | Some file ->
-          let loc_info = count_lines_in_file file in
-          Printf.printf "Number of lines in file %s: %s\n" file
-            (match loc_info with
-            | Some info -> (
-                string_of_int info.line
-                ^
-                match info.column with
-                | Some col -> ", max column: " ^ string_of_int col
-                | None -> "")
-            | None -> "calculation failed");
-          loc_info
-      | None -> None
-    in
 
-    (* Set file path to implementation file, or .cmt file if not found *)
     (* Set file path to implementation file, or .cmt file if not found *)
     let file_path =
       match impl_file with Some file -> Some file | None -> Some path
@@ -378,7 +339,6 @@ let parse_cmt_file path =
       interface_digest = cmt_info.cmt_interface_digest;
       implementation_digest = None;
       file_path;
-      loc;
     }
   with
   | Invalid_cmt_file _ as e -> raise e

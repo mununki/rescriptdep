@@ -4,11 +4,8 @@
 (* Create a string map module *)
 module StringMap = Map.Make (String)
 
-(* Location type definition: includes line and column information *)
-type location = { line : int; column : int option }
-
 (* Module metadata type *)
-type module_metadata = { path : string option; loc : location option }
+type module_metadata = { path : string option }
 
 (* Graph representation including module metadata *)
 type t = {
@@ -20,8 +17,8 @@ type t = {
 let empty = { dependencies = StringMap.empty; metadata = StringMap.empty }
 
 (* Add a module and its dependencies to the graph *)
-let add graph module_name dependencies path loc =
-  let metadata = { path; loc } in
+let add graph module_name dependencies path =
+  let metadata = { path } in
   {
     dependencies = StringMap.add module_name dependencies graph.dependencies;
     metadata = StringMap.add module_name metadata graph.metadata;
@@ -33,32 +30,18 @@ let get_metadata_map graph = graph.metadata
 (* Get module metadata record for a module *)
 let get_module_metadata graph module_name =
   try StringMap.find module_name graph.metadata
-  with Not_found -> { path = None; loc = None }
+  with Not_found -> { path = None }
 
 (* Get module path *)
 let get_module_path graph module_name =
   let metadata = get_module_metadata graph module_name in
   metadata.path
 
-(* Get module LOC *)
-let get_module_loc graph module_name =
-  let metadata = get_module_metadata graph module_name in
-  metadata.loc
-
 (* Build a graph from a list of module_info structures *)
 let build_from_module_infos infos =
   List.fold_left
     (fun graph info ->
-      (* Convert Parser.loc to Dependency_graph.location *)
-      let loc_converted =
-        match info.Parser.loc with
-        | Some loc_info ->
-            Some
-              { line = loc_info.Parser.line; column = loc_info.Parser.column }
-        | None -> None
-      in
-      add graph info.Parser.name info.Parser.dependencies info.Parser.file_path
-        loc_converted)
+      add graph info.Parser.name info.Parser.dependencies info.Parser.file_path)
     empty infos
 
 (* Get the dependencies of a module *)
@@ -265,26 +248,8 @@ let create_focused_graph graph center_module =
           let filtered_deps = List.filter (fun d -> d = center_module) deps in
           (* Preserve metadata - add dependent modules *)
           let m_metadata = get_module_metadata graph m in
-          add acc m filtered_deps m_metadata.path m_metadata.loc)
+          add acc m filtered_deps m_metadata.path)
         result dependents
     in
 
     result
-
-(* Helper to convert location to string for json output *)
-let location_to_json_string loc =
-  match loc with
-  | Some location ->
-      let line_str = string_of_int location.line in
-      let column_str =
-        match location.column with
-        | Some col -> ", \"column\": " ^ string_of_int col
-        | None -> ""
-      in
-      "{\"line\": " ^ line_str ^ column_str ^ "}"
-  | None -> "null"
-
-(* Get module LOC as string for JSON output *)
-let get_module_loc_string graph module_name =
-  let metadata = get_module_metadata graph module_name in
-  location_to_json_string metadata.loc
