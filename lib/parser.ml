@@ -139,9 +139,120 @@ module DependencyExtractor = struct
         (* For path applications, we'll use the first path *)
         extract_module_from_path p1
 
+  (* Read source file and check if a module is actually used in the code *)
+  let is_module_used_in_source source_file module_name =
+    if not (Sys.file_exists source_file) then true
+      (* If source file doesn't exist, conservatively return true *)
+    else
+      try
+        let ic = open_in source_file in
+        let content = really_input_string ic (in_channel_length ic) in
+        close_in ic;
+
+        (* Various patterns to check if the module is actually used in the code *)
+        let check_pattern pattern =
+          try
+            let regexp = Str.regexp_case_fold pattern in
+            Str.search_forward regexp content 0 >= 0
+          with Not_found -> false
+        in
+
+        (* 1. Module open: open Module *)
+        let open_pattern = "open[ \t]+" ^ module_name ^ "\\b" in
+        (* 2. Module usage: Module.something *)
+        let use_pattern = module_name ^ "\\." in
+        (* 3. Module type: module type of Module *)
+        let module_type_pattern =
+          "module[ \t]+type[ \t]+of[ \t]+" ^ module_name ^ "\\b"
+        in
+        (* 4. Module include: include Module *)
+        let include_pattern = "include[ \t]+" ^ module_name ^ "\\b" in
+        (* 5. Module definition: module X = Module *)
+        let assign_pattern =
+          "module[ \t]+[A-Za-z0-9_]+[ \t]*=[ \t]*" ^ module_name ^ "\\b"
+        in
+        (* 6. Module as function argument: function(Module) *)
+        let param_pattern = "[(,][ \t]*" ^ module_name ^ "[ \t]*[,)]" in
+
+        (* Check if the module is used with regex pattern matching *)
+        let is_used =
+          check_pattern open_pattern || check_pattern use_pattern
+          || check_pattern module_type_pattern
+          || check_pattern include_pattern
+          || check_pattern assign_pattern
+          || check_pattern param_pattern
+        in
+
+        if is_used then
+          Printf.printf "Module %s is actually used in %s\n" module_name
+            source_file
+        else
+          Printf.printf "Module %s is not used in source %s\n" module_name
+            source_file;
+
+        is_used
+      with _ ->
+        Printf.printf "Error reading source file %s\n" source_file;
+        true (* In case of file reading failure, conservatively return true *)
+
   (* Extract dependencies from cmt_info structure *)
   let extract_dependencies_from_cmt_info cmt_info =
     let deps = ref [] in
+
+    (* Check source file path *)
+    let source_file_opt = cmt_info.Cmt_format.cmt_sourcefile in
+    let source_file =
+      match source_file_opt with
+      | Some path -> (
+          (* Try to convert .cmt file path to original source file (.res, .re, .ml) *)
+          let base_path = Filename.remove_extension path in
+          let dir_path = Filename.dirname path in
+          let base_name = Filename.basename base_path in
+
+          (* Configure possible directories to look for source files *)
+          let possible_dirs =
+            if
+              String.length path > 11
+              && String.sub path (String.length path - 11) 11 = "/lib/bs/src/"
+              || Str.string_match (Str.regexp ".*/lib/bs/src/.*") path 0
+            then
+              (* For ReScript projects, check src directory instead of lib/bs/src *)
+              let parts = Str.split (Str.regexp "/lib/bs/src/") path in
+              match parts with
+              | [ prefix; suffix ] ->
+                  [
+                    dir_path;
+                    Filename.concat prefix "src";
+                    Filename.concat (Filename.dirname dir_path) "src";
+                  ]
+              | _ -> [ dir_path ]
+            else [ dir_path; Filename.concat (Filename.dirname dir_path) "src" ]
+          in
+
+          (* Extension list *)
+          let extensions = [ ".res" ] in
+
+          (* Generate all possible file paths from directory and extension combinations *)
+          let candidates =
+            List.fold_left
+              (fun acc dir ->
+                List.fold_left
+                  (fun acc' ext ->
+                    Filename.concat dir (base_name ^ ext) :: acc')
+                  acc extensions)
+              [] possible_dirs
+          in
+
+          (* Return the first existing file or use the original path *)
+          try List.find Sys.file_exists candidates
+          with Not_found ->
+            Printf.printf "Source file not found for %s, using cmt path\n" path;
+            path)
+      | None ->
+          Printf.printf "No source file info in cmt for %s\n"
+            cmt_info.Cmt_format.cmt_modname;
+          "" (* No source file information available *)
+    in
 
     (* Extract module names directly from imports list *)
     (try
@@ -149,7 +260,9 @@ module DependencyExtractor = struct
          (fun (module_name, _) ->
            if
              is_valid_module_name module_name
-             && not (is_stdlib_or_internal_module module_name)
+             && (not (is_stdlib_or_internal_module module_name))
+             && (source_file = ""
+                || is_module_used_in_source source_file module_name)
            then deps := module_name :: !deps)
          cmt_info.Cmt_format.cmt_imports
      with _ -> ());

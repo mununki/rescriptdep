@@ -4,6 +4,7 @@ let input_files = ref []
 let output_file = ref None
 let format = ref Rescriptdep.Formatter.Dot
 let focus_module = ref None
+let verbose = ref false
 
 let spec_list =
   [
@@ -39,6 +40,7 @@ let spec_list =
     ( "--module",
       Arg.String (fun s -> focus_module := Some s),
       "Focus on specific module and its dependencies" );
+    ("--verbose", Arg.Set verbose, "Enable verbose output");
   ]
 
 let anon_fun file = input_files := file :: !input_files
@@ -78,13 +80,23 @@ let main () =
     in
 
     (* Output the graph to the specified output *)
-    let out_channel =
-      match !output_file with Some file -> open_out file | None -> stdout
-    in
+    if !verbose then
+      Printf.eprintf "Output format: %s\n"
+        (match !format with
+        | Rescriptdep.Formatter.Dot -> "dot"
+        | Rescriptdep.Formatter.Json -> "json");
 
-    Rescriptdep.Formatter.output_graph !format focused_graph out_channel;
-
-    if !output_file <> None then close_out out_channel;
+    (match !output_file with
+    | Some file ->
+        (* Output to file only *)
+        if !verbose then Printf.eprintf "Writing output to file: %s\n" file;
+        let out_channel = open_out file in
+        Rescriptdep.Formatter.output_graph !format focused_graph out_channel;
+        close_out out_channel
+    | None ->
+        (* Output to stdout when no file output option is provided *)
+        if !verbose then Printf.eprintf "Writing output to stdout\n";
+        Rescriptdep.Formatter.output_graph !format focused_graph stdout);
 
     exit 0
   with
