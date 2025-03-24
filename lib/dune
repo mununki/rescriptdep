@@ -1,6 +1,6 @@
 (library
  (name rescriptdep)
  (flags
-  (:standard -w -27))
+  (:standard -w -27-32-33-34-37-39-50-52))
  (public_name rescriptdep)
- (libraries str))
+ (libraries str vendor))

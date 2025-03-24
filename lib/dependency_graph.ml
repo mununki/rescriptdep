@@ -17,8 +17,7 @@ let add graph module_name dependencies =
 (* Build a graph from a list of module_info structures *)
 let build_from_module_infos infos =
   List.fold_left
-    (fun graph info ->
-      add graph info.Cmi_parser.name info.Cmi_parser.dependencies)
+    (fun graph info -> add graph info.Parser.name info.Parser.dependencies)
     empty infos
 
 (* Get the dependencies of a module *)

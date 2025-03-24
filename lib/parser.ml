@@ -9,12 +9,7 @@ type module_info = {
 }
 
 (* Exceptions *)
-exception Invalid_cmi_file of string
-exception Unsupported_cmi_version of string
-
-(* Magic numbers for cmi files *)
-let cmi_magic_number = "Caml1999I"
-let rescript_magic_number = "BS00MI"
+exception Invalid_cmt_file of string
 
 (* Check if a module is part of the standard library or internal modules *)
 let is_stdlib_or_internal_module name =
@@ -103,24 +98,24 @@ let is_valid_module_name str =
     true
   with Exit -> false
 
-(* Recursively scan directories for .cmi files *)
+(* Recursively scan directories for .cmt files *)
 let rec scan_directory_recursive dir =
   try
     let files = Sys.readdir dir in
-    let cmi_files = ref [] in
+    let cmt_files = ref [] in
 
     Array.iter
       (fun file ->
         let path = Filename.concat dir file in
         if Sys.is_directory path then
           (* Recursively scan subdirectory *)
-          cmi_files := List.append (scan_directory_recursive path) !cmi_files
-        else if Filename.check_suffix file ".cmi" then
-          (* Add cmi file *)
-          cmi_files := path :: !cmi_files)
+          cmt_files := List.append (scan_directory_recursive path) !cmt_files
+        else if Filename.check_suffix file ".cmt" then
+          (* Add cmt file *)
+          cmt_files := path :: !cmt_files)
       files;
 
-    !cmi_files
+    !cmt_files
   with Sys_error _ ->
     Printf.printf "Warning: Could not read directory %s\n" dir;
     []
@@ -128,35 +123,47 @@ let rec scan_directory_recursive dir =
 (* Use recursive directory scanning *)
 let scan_directory = scan_directory_recursive
 
-(* Parse a cmi file and extract module information *)
-let parse_cmi_file project_modules path =
-  let module_name =
-    Filename.basename path |> Filename.remove_extension |> normalize_module_name
-  in
+(* Module dependency analysis using typedtree *)
+module DependencyExtractor = struct
+  (* Extract module names from paths in the typedtree *)
+  let rec extract_module_from_path path =
+    match path with
+    | Path.Pident id ->
+        (* In our simplified Path module, Pident only contains a string *)
+        id
+    | Path.Pdot (p, s, _) ->
+        (* For Pdot, extract just the name part *)
+        s
+    | Path.Papply (p1, p2) ->
+        (* For path applications, we'll use the first path *)
+        extract_module_from_path p1
 
-  (* We'll extract dependencies through binary analysis *)
-  let dependencies = ref [] in
+  (* Process a structure for dependencies *)
+  let process_structure structure =
+    let deps = ref [] in
 
-  (* Check if a module name is valid and belongs to the project *)
-  let is_valid_project_module name =
-    is_valid_module_name name
-    && (not (is_stdlib_or_internal_module name))
-    && name <> module_name
-    &&
-    let normalized = normalize_module_name name in
-    List.mem normalized project_modules
-  in
+    (* This is a simplified version that would normally analyze the full structure *)
+    (* Instead, we'll directly analyze the binary file to extract module names *)
+    !deps
 
-  (* Based on ReScript VSCode's approach for analyzing binary files *)
-  let extract_module_names content =
-    let len = String.length content in
+  (* Extract dependencies from a CMT file *)
+  let extract_dependencies ic =
+    (* Read entire file content *)
+    let pos = pos_in ic in
+    seek_in ic 0;
+    let len = in_channel_length ic in
+    let content = really_input_string ic len in
+    seek_in ic pos;
+
+    (* Extract potential module names from the binary content *)
+    let deps = ref [] in
     let i = ref 0 in
 
-    while !i < len do
-      (* Look for potential module name start (capital letter) *)
-      if !i < len && content.[!i] >= 'A' && content.[!i] <= 'Z' then (
-        (* Extract potential module name *)
+    while !i < len - 1 do
+      (* Look for capital letters that might start module names *)
+      if content.[!i] >= 'A' && content.[!i] <= 'Z' then (
         let start = !i in
+        (* Extract potential identifier *)
         while
           !i < len
           && ((content.[!i] >= 'A' && content.[!i] <= 'Z')
@@ -168,59 +175,83 @@ let parse_cmi_file project_modules path =
           incr i
         done;
 
-        let potential_module = String.sub content start (!i - start) in
-
-        (* Check if it's a valid module name in this project *)
-        if is_valid_project_module potential_module then
-          dependencies := potential_module :: !dependencies);
+        if !i > start + 1 then
+          let name = String.sub content start (!i - start) in
+          (* Only add if it looks like a valid module name and not stdlib *)
+          if
+            is_valid_module_name name && not (is_stdlib_or_internal_module name)
+          then deps := name :: !deps);
       incr i
-    done
+    done;
+
+    (* Return unique dependencies *)
+    List.sort_uniq String.compare !deps
+end
+
+(* Parse a cmt file and extract module information *)
+let parse_cmt_file path =
+  let module_name =
+    Filename.basename path |> Filename.remove_extension |> normalize_module_name
   in
 
-  (try
-     let ic = open_in_bin path in
-     try
-       (* Check magic number *)
-       let magic_len = String.length cmi_magic_number in
-       let buffer = really_input_string ic magic_len in
+  try
+    (* Use Cmt_format to read the file - with relaxed format checking *)
+    let cmt_info =
+      try Cmt_format.read_cmt path
+      with Cmt_format.Error msg ->
+        (* Provide more detailed error information *)
+        Printf.printf
+          "Warning: Problem with CMT file %s: %s (continuing anyway)\n" path msg;
 
-       let is_ocaml = buffer = cmi_magic_number in
-       let is_rescript = buffer = rescript_magic_number in
+        (* Create basic information even if there's a problem to continue processing *)
+        {
+          Cmt_format.cmt_modname = module_name;
+          cmt_annots = Implementation (Obj.magic ());
+          cmt_value_dependencies = [];
+          cmt_comments = [];
+          cmt_args = [||];
+          cmt_sourcefile = Some path;
+          cmt_builddir = "";
+          cmt_loadpath = [];
+          cmt_source_digest = None;
+          cmt_initial_env = Env.empty;
+          cmt_imports = [];
+          cmt_interface_digest = None;
+          cmt_use_summaries = false;
+        }
+    in
 
-       if not (is_ocaml || is_rescript) then (
-         close_in ic;
-         raise
-           (Invalid_cmi_file (Printf.sprintf "Invalid magic number in %s" path)));
+    (* Extract dependencies using binary analysis *)
+    let ic = open_in_bin path in
+    let dependencies = DependencyExtractor.extract_dependencies ic in
+    close_in ic;
 
-       (* Read version *)
-       let version = input_binary_int ic in
-       Printf.printf "Processing file %s (version: %d)\n" path version;
+    (* Filter out self-references and normalize *)
+    let filtered_deps =
+      dependencies
+      |> List.filter (fun name ->
+             normalize_module_name name <> module_name
+             && not (is_stdlib_or_internal_module name))
+      |> List.map normalize_module_name
+      |> List.sort_uniq compare
+    in
 
-       (* Read the entire content for scanning *)
-       seek_in ic 0;
-       let file_size = in_channel_length ic in
-       let content = really_input_string ic file_size in
-
-       (* Extract module names from binary content *)
-       extract_module_names content;
-
-       close_in ic
-     with e ->
-       close_in_noerr ic;
-       Printf.printf "Warning: Error parsing %s: %s\n" path
-         (Printexc.to_string e)
-   with Sys_error msg ->
-     Printf.printf "Warning: System error with %s: %s\n" path msg);
-
-  (* Remove duplicates and sort *)
-  let unique_deps = List.sort_uniq String.compare !dependencies in
-
-  {
-    name = module_name;
-    dependencies = unique_deps;
-    interface_digest = None;
-    implementation_digest = None;
-  }
+    (* Create the module info *)
+    {
+      name = module_name;
+      dependencies = filtered_deps;
+      interface_digest = cmt_info.cmt_interface_digest;
+      implementation_digest = None;
+    }
+  with
+  | Invalid_cmt_file _ as e -> raise e
+  | Sys_error msg ->
+      raise
+        (Invalid_cmt_file (Printf.sprintf "System error with %s: %s" path msg))
+  | e ->
+      raise
+        (Invalid_cmt_file
+           (Printf.sprintf "Error parsing %s: %s" path (Printexc.to_string e)))
 
 (* Get the list of all project modules using recursive scanning *)
 let get_project_modules paths =
@@ -237,7 +268,7 @@ let get_project_modules paths =
           (fun file ->
             let path = Filename.concat dir file in
             if Sys.is_directory path then scan_dir_for_modules path
-            else if Filename.check_suffix file ".cmi" then
+            else if Filename.check_suffix file ".cmt" then
               let name =
                 Filename.basename file |> Filename.remove_extension
                 |> normalize_module_name
@@ -252,7 +283,7 @@ let get_project_modules paths =
   List.iter
     (fun path ->
       if Sys.is_directory path then scan_dir_for_modules path
-      else if Filename.check_suffix path ".cmi" then
+      else if Filename.check_suffix path ".cmt" then
         let name =
           Filename.basename path |> Filename.remove_extension
           |> normalize_module_name
@@ -273,13 +304,22 @@ let parse_files_or_dirs paths =
     | [] -> accum
     | path :: rest ->
         if Sys.is_directory path then
-          let cmi_files = scan_directory path in
-          process accum (cmi_files @ rest)
-        else if Filename.check_suffix path ".cmi" then (
+          let cmt_files = scan_directory path in
+          process accum (cmt_files @ rest)
+        else if Filename.check_suffix path ".cmt" then (
           try
-            let module_info = parse_cmi_file project_modules path in
-            process (module_info :: accum) rest
-          with Invalid_cmi_file msg ->
+            let module_info = parse_cmt_file path in
+            (* Filter dependencies to only include project modules *)
+            let filtered_deps =
+              List.filter
+                (fun dep -> List.mem dep project_modules)
+                module_info.dependencies
+            in
+            let updated_info =
+              { module_info with dependencies = filtered_deps }
+            in
+            process (updated_info :: accum) rest
+          with Invalid_cmt_file msg ->
             Printf.eprintf "Warning: %s\n" msg;
             process accum rest)
         else process accum rest
