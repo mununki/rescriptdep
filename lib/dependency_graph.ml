@@ -4,38 +4,79 @@
 (* Create a string map module *)
 module StringMap = Map.Make (String)
 
-(* Graph representation as an adjacency list *)
-type t = string list StringMap.t
+(* Location type definition: includes line and column information *)
+type location = { line : int; column : int option }
+
+(* Module metadata type *)
+type module_metadata = { path : string option; loc : location option }
+
+(* Graph representation including module metadata *)
+type t = {
+  dependencies : string list StringMap.t;
+  metadata : module_metadata StringMap.t;
+}
 
 (* Empty graph *)
-let empty = StringMap.empty
+let empty = { dependencies = StringMap.empty; metadata = StringMap.empty }
 
 (* Add a module and its dependencies to the graph *)
-let add graph module_name dependencies =
-  StringMap.add module_name dependencies graph
+let add graph module_name dependencies path loc =
+  let metadata = { path; loc } in
+  {
+    dependencies = StringMap.add module_name dependencies graph.dependencies;
+    metadata = StringMap.add module_name metadata graph.metadata;
+  }
+
+(* Get module metadata map *)
+let get_metadata_map graph = graph.metadata
+
+(* Get module metadata record for a module *)
+let get_module_metadata graph module_name =
+  try StringMap.find module_name graph.metadata
+  with Not_found -> { path = None; loc = None }
+
+(* Get module path *)
+let get_module_path graph module_name =
+  let metadata = get_module_metadata graph module_name in
+  metadata.path
+
+(* Get module LOC *)
+let get_module_loc graph module_name =
+  let metadata = get_module_metadata graph module_name in
+  metadata.loc
 
 (* Build a graph from a list of module_info structures *)
 let build_from_module_infos infos =
   List.fold_left
-    (fun graph info -> add graph info.Parser.name info.Parser.dependencies)
+    (fun graph info ->
+      (* Convert Parser.loc to Dependency_graph.location *)
+      let loc_converted =
+        match info.Parser.loc with
+        | Some loc_info ->
+            Some
+              { line = loc_info.Parser.line; column = loc_info.Parser.column }
+        | None -> None
+      in
+      add graph info.Parser.name info.Parser.dependencies info.Parser.file_path
+        loc_converted)
     empty infos
 
 (* Get the dependencies of a module *)
 let get_dependencies graph module_name =
-  try StringMap.find module_name graph with Not_found -> []
+  try StringMap.find module_name graph.dependencies with Not_found -> []
 
 (* Get all module names in the graph *)
-let get_modules graph = StringMap.bindings graph |> List.map fst
+let get_modules graph = StringMap.bindings graph.dependencies |> List.map fst
 
 (* Find direct dependents of a module (modules that depend on it) *)
 let find_dependents graph module_name =
   StringMap.fold
     (fun m deps acc -> if List.mem module_name deps then m :: acc else acc)
-    graph []
+    graph.dependencies []
 
 (* Check if a cycle exists in the dependency graph starting from a module *)
 let has_cycle graph start_module =
-  let visited = Hashtbl.create (StringMap.cardinal graph) in
+  let visited = Hashtbl.create (StringMap.cardinal graph.dependencies) in
   let rec visit path module_name =
     if List.mem module_name path then
       (* Cycle detected *)
@@ -68,7 +109,7 @@ let find_all_cycles graph =
 
 (* Topological sort of modules (dependencies first) *)
 let topological_sort graph =
-  let visited = Hashtbl.create (StringMap.cardinal graph) in
+  let visited = Hashtbl.create (StringMap.cardinal graph.dependencies) in
   let result = ref [] in
 
   let rec visit module_name =
@@ -85,7 +126,7 @@ let topological_sort graph =
 
 (* Get transitive dependencies of a module *)
 let transitive_dependencies graph module_name =
-  let visited = Hashtbl.create (StringMap.cardinal graph) in
+  let visited = Hashtbl.create (StringMap.cardinal graph.dependencies) in
   let result = ref [] in
 
   let rec visit m =
@@ -104,19 +145,19 @@ let create_subgraph graph modules =
   let module StringSet = Set.Make (String) in
   let module_set = StringSet.of_list modules in
 
-  StringMap.filter (fun m _ -> StringSet.mem m module_set) graph
+  StringMap.filter (fun m _ -> StringSet.mem m module_set) graph.dependencies
   |> StringMap.map (fun deps ->
          List.filter (fun dep -> StringSet.mem dep module_set) deps)
 
 (* Trim the graph to only include modules reachable from the specified roots *)
 let trim_to_reachable graph roots =
-  let reachable = Hashtbl.create (StringMap.cardinal graph) in
+  let reachable = Hashtbl.create (StringMap.cardinal graph.dependencies) in
 
   let rec mark_reachable m =
     if not (Hashtbl.mem reachable m) then (
       Hashtbl.add reachable m true;
       try
-        let deps = StringMap.find m graph in
+        let deps = StringMap.find m graph.dependencies in
         List.iter mark_reachable deps
       with Not_found -> ())
   in
@@ -132,9 +173,9 @@ let find_strongly_connected_components graph =
   (* Implementation of Tarjan's algorithm *)
   let index = ref 0 in
   let stack = ref [] in
-  let indices = Hashtbl.create (StringMap.cardinal graph) in
-  let lowlinks = Hashtbl.create (StringMap.cardinal graph) in
-  let on_stack = Hashtbl.create (StringMap.cardinal graph) in
+  let indices = Hashtbl.create (StringMap.cardinal graph.dependencies) in
+  let lowlinks = Hashtbl.create (StringMap.cardinal graph.dependencies) in
+  let on_stack = Hashtbl.create (StringMap.cardinal graph.dependencies) in
   let sccs = ref [] in
 
   let rec strong_connect v =
@@ -144,7 +185,7 @@ let find_strongly_connected_components graph =
     stack := v :: !stack;
     Hashtbl.add on_stack v true;
 
-    let deps = try StringMap.find v graph with Not_found -> [] in
+    let deps = try StringMap.find v graph.dependencies with Not_found -> [] in
     List.iter
       (fun w ->
         if not (Hashtbl.mem indices w) then (
@@ -195,37 +236,55 @@ let calculate_metrics graph =
 (* Create a focused graph centered around a specific module *)
 let create_focused_graph graph center_module =
   (* Check if the module exists *)
-  if not (StringMap.mem center_module graph) then
+  if not (StringMap.mem center_module graph.dependencies) then
     (* Return empty graph if module doesn't exist *)
-    StringMap.empty
+    { dependencies = StringMap.empty; metadata = StringMap.empty }
   else
-    (* 1. The center module itself *)
-    let result = StringMap.empty in
+    (* 1. Get the center module dependencies *)
+    let center_deps = get_dependencies graph center_module in
 
-    (* 2. Add the center module and its direct dependencies *)
-    let center_deps =
-      try StringMap.find center_module graph with Not_found -> []
+    (* 2. Get modules that depend on the center module (its dependents) *)
+    let dependents = find_dependents graph center_module in
+
+    (* 3. Start building a new graph with just the center module *)
+    (* Preserve metadata - add center module *)
+    let center_metadata = get_module_metadata graph center_module in
+    let result =
+      {
+        dependencies = StringMap.singleton center_module center_deps;
+        metadata = StringMap.singleton center_module center_metadata;
+      }
     in
-    let result = StringMap.add center_module center_deps result in
 
-    (* 3. Find modules that directly depend on the center module *)
-    let direct_dependents =
-      StringMap.fold
-        (fun m deps acc ->
-          if List.mem center_module deps then (m, deps) :: acc else acc)
-        graph []
-    in
-
-    (* 4. Add each dependent module with ONLY its dependency on the center module *)
+    (* 4. Add modules that depend on the center module with their dependencies *)
     let result =
       List.fold_left
-        (fun acc (m, deps) ->
-          (* Filter the original dependencies to keep only the center module *)
-          let filtered_deps =
-            List.filter (fun dep -> dep = center_module) deps
-          in
-          StringMap.add m filtered_deps acc)
-        result direct_dependents
+        (fun acc m ->
+          let deps = get_dependencies graph m in
+          (* Filter dependencies to only include those that point to our center module *)
+          let filtered_deps = List.filter (fun d -> d = center_module) deps in
+          (* Preserve metadata - add dependent modules *)
+          let m_metadata = get_module_metadata graph m in
+          add acc m filtered_deps m_metadata.path m_metadata.loc)
+        result dependents
     in
 
     result
+
+(* Helper to convert location to string for json output *)
+let location_to_json_string loc =
+  match loc with
+  | Some location ->
+      let line_str = string_of_int location.line in
+      let column_str =
+        match location.column with
+        | Some col -> ", \"column\": " ^ string_of_int col
+        | None -> ""
+      in
+      "{\"line\": " ^ line_str ^ column_str ^ "}"
+  | None -> "null"
+
+(* Get module LOC as string for JSON output *)
+let get_module_loc_string graph module_name =
+  let metadata = get_module_metadata graph module_name in
+  location_to_json_string metadata.loc
