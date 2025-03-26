@@ -65,35 +65,23 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
 
     try {
       progress.report({ message: 'Finding CLI path...' });
-      // Check for cancellation
-      if (token.isCancellationRequested) {
-        return;
-      }
+      if (token.isCancellationRequested) return;
 
       // Find CLI path
       const cliPath = await findRescriptDepCLI(context);
 
-      // Temporary file path
-      const tempDir = path.join(workspaceRoot, '.vscode');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir);
-      }
-
       // bs directory path
       const bsDir = path.join(workspaceRoot, 'lib', 'bs');
 
-      let moduleArgs: string[] = [];
+      let moduleName: string | undefined;
 
       // Request module name if in focused mode
       if (focusOnModule) {
         progress.report({ message: 'Getting module information...' });
-        // Check for cancellation
-        if (token.isCancellationRequested) {
-          return;
-        }
+        if (token.isCancellationRequested) return;
 
         // First try to get module name from active editor
-        let moduleName = getCurrentModuleNameFromActiveEditor();
+        moduleName = getCurrentModuleNameFromActiveEditor();
 
         // If no active ReScript file is open or couldn't determine module name,
         // fall back to asking the user
@@ -105,36 +93,29 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
         }
 
         if (!moduleName) return; // User cancelled or no module name available
-
-        moduleArgs = ['--module', moduleName];
       }
 
-      // Check for cancellation
-      if (token.isCancellationRequested) {
-        return;
-      }
+      if (token.isCancellationRequested) return;
 
-      const dotContent = await runRescriptDep(cliPath, [
-        '--format=dot',
-        ...moduleArgs,
+      // Get data in JSON format
+      const jsonContent = await runRescriptDep(cliPath, [
+        '--format=json',
+        ...(moduleName ? ['--module', moduleName] : []),
         bsDir
       ]);
 
-      // Display webview with the dot content
-      progress.report({ message: 'Generating graph...' });
-      // Check for cancellation
-      if (token.isCancellationRequested) {
-        return;
-      }
+      // Display webview with the json data
+      progress.report({ message: 'Generating visualization...' });
+      if (token.isCancellationRequested) return;
 
-      if (dotContent) {
-        showGraphWebview(context, dotContent, focusOnModule);
+      if (jsonContent) {
+        showGraphWebview(context, jsonContent, focusOnModule, moduleName);
       } else {
-        vscode.window.showErrorMessage('Failed to generate dependency graph');
+        vscode.window.showErrorMessage('Failed to generate dependency visualization');
       }
     } catch (error) {
       if (!token.isCancellationRequested) {
-        vscode.window.showErrorMessage(`Error generating dependency graph: ${error}`);
+        vscode.window.showErrorMessage(`Error generating dependency visualization: ${error}`);
       }
     }
   });
@@ -265,12 +246,14 @@ async function runRescriptDep(cliPath: string, args: string[]): Promise<string> 
 // JSON module type extension
 interface ModuleNode {
   name: string;
-  dependencies: string[];
+  dependencies: { name: string, path?: string }[] | string[];
+  dependents: { name: string, path?: string }[] | string[];
   fan_in: number;
   fan_out: number;
   in_cycle: boolean;
-  file_path: string | null;
-  location: { start: number; end: number } | null;
+  file_path?: string | null;
+  path?: string;
+  location?: { start: number; end: number } | null;
 }
 
 interface DependencyData {
@@ -278,607 +261,528 @@ interface DependencyData {
   cycles: string[][];
   metrics: {
     total_modules: number;
-    avg_fan_in: number;
-    avg_fan_out: number;
-    max_fan_in: number;
-    max_fan_out: number;
-    cyclic_modules: number;
+    average_fan_in?: number;
+    average_fan_out?: number;
+    avg_fan_in?: number;
+    avg_fan_out?: number;
+    max_fan_in?: number;
+    max_fan_out?: number;
+    cyclic_modules?: number;
+    most_depended_upon?: { module: string, count: number };
+    most_dependencies?: { module: string, count: number };
+    cycles_count?: number;
   };
 }
 
 // Graph webview display function
-function showGraphWebview(context: vscode.ExtensionContext, dotContent: string, isFocusedMode: boolean = false) {
-  // Existing code...
+function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string, isFocusedMode: boolean = false, centerModuleName?: string) {
+  const data = JSON.parse(jsonContent);
+  const modules = data.modules || [];
 
-  // Generate JSON graph data
-  const jsonData = parseDotContentAsJson(dotContent);
+  // Only find a center module if in focused mode
+  let centerModule = null;
+  if (isFocusedMode) {
+    // If centerModuleName is provided, find the module with that name
+    if (centerModuleName) {
+      // Maintain TypeScript type checking here
+      const foundModule = modules.find((m: ModuleNode) => m.name === centerModuleName);
+      centerModule = foundModule || null;
+    }
 
-  // Form HTML content
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-  <head>
+    // Fallback to first module if not found
+    if (!centerModule && modules.length > 0) {
+      centerModule = modules[0];
+    }
+
+    if (!centerModule) {
+      vscode.window.showErrorMessage('No module data available');
+      return;
+    }
+  }
+
+  // Create HTML content without problematic CSS properties
+  const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>ReScript Dependency Visualizer</title>
-      <script src="https://d3js.org/d3.v7.min.js"></script>
-      <script src="https://unpkg.com/@hpcc-js/wasm@1.14.1/dist/index.min.js"></script>
-      <script src="https://unpkg.com/d3-graphviz@4.1.0/build/d3-graphviz.min.js"></script>
+    <title>ReScript Dependency Graph</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
-        body, html {
-          margin: 0;
-          padding: 0;
-          width: 100%;
-          height: 100%;
-          overflow: hidden;
+        body {
+            margin: 0;
+            padding: 10px;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--vscode-editor-background);
+            color: var(--vscode-editor-foreground);
         }
-        #container {
-          display: flex;
-          width: 100%;
-          height: 100vh;
-          overflow: hidden;
+        #graph-container {
+            width: 100%;
+            height: calc(100vh - 60px);
+            overflow: hidden;
         }
-        #graph {
-          flex: 3;
-          height: 100%;
-          overflow: hidden;
-          position: relative;
+        .legend {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
         }
-        #graph svg {
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          cursor: move; /* Indicates draggable */
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-right: 20px;
         }
-        #details {
-          flex: 1;
-          padding: 15px;
-          overflow-y: auto;
-          border-left: 1px solid #ccc;
-          height: 100%;
-          box-sizing: border-box;
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 3px;
         }
-        
-        /* Additional click-related styles */
-        .module-node {
-          cursor: pointer;
+        .node {
+            cursor: pointer;
         }
-        .module-node:hover {
-          opacity: 0.8;
+        .node rect {
+            border-radius: 6px;
         }
-        /* Selected node style */
-        .module-node.selected .label {
-          fill: #ff6600 !important;
-          font-weight: bold;
+        .node text {
+            font-size: 12px;
+            fill: var(--vscode-editor-foreground);
+            text-anchor: middle;
+            dominant-baseline: middle;
         }
-        .module-node.selected ellipse {
-          stroke: #ff6600 !important;
-          stroke-width: 2px !important;
+        .link {
+            fill: none;
+            stroke: #999;
+            stroke-opacity: 0.6;
+            stroke-width: 1.5px;
         }
-        .dependency-item {
-          cursor: pointer;
-          padding: 4px 8px;
-          margin: 2px 0;
-          border-radius: 4px;
+        .center-node rect {
+            fill: #4CAF50;
+            stroke: #2E7D32;
         }
-        .dependency-item:hover {
-          background-color: #e9e9e9;
+        .dependent-node rect {
+            fill: #2196F3;
+            stroke: #1565C0;
         }
-        .file-path {
-          font-size: 0.8em;
-          color: #666;
-          margin-left: 10px;
-        }
-        .status-message {
-          color: #666;
-          font-size: 0.9em;
-          margin-top: 8px;
-          font-style: italic;
-        }
-        /* Graph zoom controls */
-        .controls {
-          position: absolute;
-          bottom: 20px;
-          left: 20px;
-          z-index: 10;
-          background: rgba(255, 255, 255, 0.8);
-          padding: 5px;
-          border-radius: 4px;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        .controls button {
-          width: 30px;
-          height: 30px;
-          margin: 0 5px;
-          font-size: 18px;
-          cursor: pointer;
-          border: 1px solid #ccc;
-          background: white;
-          border-radius: 4px;
-        }
-        .controls button:hover {
-          background: #f0f0f0;
+        .dependency-node rect {
+            fill: #F44336;
+            stroke: #C62828;
         }
     </style>
-  </head>
-  <body>
-      <div id="container">
-        <div id="graph">
-          <div class="controls">
-            <button id="zoom-in">+</button>
-            <button id="zoom-out">-</button>
-            <button id="zoom-reset">⟳</button>
-          </div>
+</head>
+<body>
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #4CAF50;"></div>
+            <span>Center Module</span>
         </div>
-        <div id="details">
-          <h2>Module Details</h2>
-          <div id="module-name">Select a module to see details</div>
-          <div id="status-message" class="status-message"></div>
-          <h3>Dependencies</h3>
-          <ul id="dependencies"></ul>
-          <h3>Dependents</h3>
-          <ul id="dependents"></ul>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #2196F3;"></div>
+            <span>Dependents (uses center module)</span>
         </div>
-      </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #F44336;"></div>
+            <span>Dependencies (used by center module)</span>
+        </div>
+    </div>
+    <div id="graph-container">
+        <svg id="graph"></svg>
+    </div>
     <script>
-        // Main script for dependency visualization
-        (function() {
-          try {
-            console.log("Initializing webview script");
-            const vscode = acquireVsCodeApi();
+        const vscode = acquireVsCodeApi();
+        
+        // Parse JSON data
+        const data = ${JSON.stringify(data)};
+        const isFocusedMode = ${isFocusedMode};
+        const centerModule = ${JSON.stringify(centerModule)};
+        
+        // Create and render the dependency graph
+        function createGraph() {
+            const container = document.getElementById('graph-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
             
-            // Status message helper
-            function showStatusMessage(message) {
-              console.log("Status message:", message);
-              const statusEl = document.getElementById('status-message');
-              statusEl.textContent = message;
-              
-              // Clear after 5 seconds
-              setTimeout(() => {
-                if (statusEl.textContent === message) {
-                  statusEl.textContent = '';
-                }
-              }, 5000);
+            // Different graph rendering based on mode
+            if (isFocusedMode && centerModule) {
+                renderFocusedGraph(width, height);
+            } else {
+                renderFullGraph(width, height);
             }
-            
-            // Module data
-            let moduleData = ${JSON.stringify(jsonData)};
-            console.log("Module data loaded:", moduleData);
-            
-            // Currently selected module
-            let selectedModule = null;
-            
-            // Zoom related variables
-            let currentZoom = 1.0;
-            
-            // Zoom control event handlers
-            document.getElementById('zoom-in').addEventListener('click', function(e) {
-              e.preventDefault();
-              e.stopPropagation();
-              currentZoom *= 1.2;
-              applyZoom();
-            });
-            
-            document.getElementById('zoom-out').addEventListener('click', function(e) {
-              e.preventDefault();
-              e.stopPropagation();
-              currentZoom /= 1.2;
-              applyZoom();
-            });
-            
-            document.getElementById('zoom-reset').addEventListener('click', function(e) {
-              e.preventDefault();
-              e.stopPropagation();
-              currentZoom = 1.0;
-              applyZoom();
-            });
-            
-            function applyZoom() {
-              try {
-                const svg = document.querySelector('#graph svg');
-                if (svg && svg.__data__) {
-                  svg.__data__.zoom.scaleTo(d3.select(svg), currentZoom);
+        }
+        
+        function renderFocusedGraph(width, height) {
+            // Create nodes array
+            const nodes = [
+                // Center node
+                {
+                    id: centerModule.name,
+                    type: 'center',
+                    label: centerModule.name,
+                    width: Math.max(centerModule.name.length * 10, 100),
+                    height: 40
                 }
-              } catch (e) {
-                console.error("Error applying zoom:", e);
-              }
-            }
+            ];
             
-            // Function to highlight the selected module in the graph
-            function highlightSelectedModule() {
-              if (!selectedModule) return;
-              
-              // Remove selected class from all nodes
-              document.querySelectorAll('.module-node').forEach(node => {
-                node.classList.remove('selected');
-              });
-              
-              // Add selected class to the selected module
-              try {
-                const moduleNodes = document.querySelectorAll('.node');
-                moduleNodes.forEach(node => {
-                  const title = node.querySelector('title');
-                  if (title && title.textContent === selectedModule) {
-                    node.classList.add('selected');
-                  }
-                });
-              } catch (e) {
-                console.error("Error highlighting module:", e);
-              }
-            }
+            // Links array
+            const links = [];
             
-            // Parse DOT content to extract module data
-            function parseDotToModuleData(dotContent) {
-              try {
-                const nodes = new Set();
-                const edges = [];
-                
-                // Extract node definitions
-                const nodeRegex = /"([^"]+)"/g;
-                let match;
-                while ((match = nodeRegex.exec(dotContent)) !== null) {
-                  nodes.add(match[1]);
-                }
-                
-                // Extract edges
-                const edgeRegex = /"([^"]+)"\s*->\s*"([^"]+)"/g;
-                while ((match = edgeRegex.exec(dotContent)) !== null) {
-                  edges.push({
-                    source: match[1],
-                    target: match[2]
-                  });
-                }
-                
-                // Create new module data
-                const newModules = [];
-                nodes.forEach(nodeName => {
-                  // Find existing module info if available
-                  const existingModule = moduleData.modules.find(m => m.name === nodeName);
-                  
-                  const dependencies = edges
-                    .filter(edge => edge.source === nodeName)
-                    .map(edge => edge.target);
-                    
-                  const dependents = edges
-                    .filter(edge => edge.target === nodeName)
-                    .map(edge => edge.source);
-                    
-                  newModules.push({
-                    name: nodeName,
-                    dependencies: dependencies,
-                    fan_in: dependents.length,
-                    fan_out: dependencies.length,
-                    in_cycle: existingModule ? existingModule.in_cycle : false,
-                    file_path: existingModule ? existingModule.file_path : null,
-                    location: existingModule ? existingModule.location : null
-                  });
+            // Add dependent modules (those that use the center module)
+            centerModule.dependents.forEach((dep, i) => {
+                const name = typeof dep === 'object' ? dep.name : dep;
+                nodes.push({
+                    id: name,
+                    type: 'dependent',
+                    label: name,
+                    width: Math.max(name.length * 10, 100),
+                    height: 40
                 });
                 
-                return {
-                  modules: newModules,
-                  cycles: [],
-                  metrics: {
-                    total_modules: newModules.length,
-                    avg_fan_in: 0,
-                    avg_fan_out: 0,
-                    max_fan_in: 0,
-                    max_fan_out: 0,
-                    cyclic_modules: 0
-                  }
-                };
-              } catch (e) {
-                console.error("Error parsing DOT content:", e);
-                return null;
-              }
-            }
+                links.push({
+                    source: name,
+                    target: centerModule.name,
+                    type: 'dependent'
+                });
+            });
             
-            // Store d3-graphviz object globally
-            let graphvizInstance = null;
+            // Add dependency modules (those that the center module uses)
+            centerModule.dependencies.forEach((dep, i) => {
+                const name = typeof dep === 'object' ? dep.name : dep;
+                nodes.push({
+                    id: name,
+                    type: 'dependency',
+                    label: name,
+                    width: Math.max(name.length * 10, 100),
+                    height: 40
+                });
+                
+                links.push({
+                    source: centerModule.name,
+                    target: name,
+                    type: 'dependency'
+                });
+            });
             
-            // Track if this is the first render
-            let isFirstRender = true;
+            // Create SVG element
+            const svg = d3.select('#graph')
+                .attr('width', width)
+                .attr('height', height);
             
-            // Function to render the graph (with all interactive features)
-            function renderGraph(dotContent, focusedModule = null) {
-              try {
-                console.log("Rendering graph...");
-                
-                // Update module data from DOT content
-                const newData = parseDotToModuleData(dotContent);
-                if (newData) {
-                  moduleData = newData;
-                  console.log("Updated module data from DOT content:", moduleData);
-                }
-                
-                // Set current selected module
-                if (focusedModule) {
-                  selectedModule = focusedModule;
-                  // Completely recreate the graph when focusing on a module to ensure center positioning
-                  d3.select('#graph').html(''); // Initialize graph container
-                  graphvizInstance = null; // Reset instance to create a new one
-                }
-                
-                // Create or reuse d3-graphviz instance
-                if (!graphvizInstance) {
-                  // Create new graphviz instance
-                  graphvizInstance = d3.select('#graph')
-                    .graphviz()
-                    .zoom(true)
-                    .fit(true)
-                    .width('100%')
-                    .height('100%')
-                    .scale(1.0) // Explicitly set initial scale
-                    .attributer(function(d) {
-                      if (d.tag === 'svg') {
-                        d.attributes.width = '100%';
-                        d.attributes.height = '100%';
-                      }
+            // Clear any existing content
+            svg.selectAll('*').remove();
+            
+            // Add group for graph content with zoom behavior
+            const g = svg.append('g');
+            
+            // Add arrow markers for direction
+            svg.append('defs').selectAll('marker')
+                .data(['dependent', 'dependency'])
+                .enter().append('marker')
+                .attr('id', d => 'arrow-' + d)
+                .attr('viewBox', '0 -5 10 10')
+                .attr('refX', 20)
+                .attr('refY', 0)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M0,-5L10,0L0,5')
+                .attr('fill', '#999');
+            
+            // Create the force simulation
+            const simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links).id(d => d.id).distance(200))
+                .force('charge', d3.forceManyBody().strength(-500))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('x', d3.forceX().x(d => {
+                    if (d.type === 'center') return width / 2;
+                    if (d.type === 'dependent') return width / 4;
+                    if (d.type === 'dependency') return width * 3/4;
+                    return width / 2;
+                }).strength(0.3))
+                .force('y', d3.forceY().y(height / 2).strength(0.1))
+                .force('collision', d3.forceCollide().radius(d => Math.max(d.width, d.height) / 2 + 20))
+                .on('tick', ticked);
+            
+            // Create links
+            const link = g.append('g')
+                .selectAll('line')
+                .data(links)
+                .enter().append('path')
+                .attr('class', 'link')
+                .attr('marker-end', d => 'url(#arrow-' + d.type + ')');
+            
+            // Create node groups
+            const node = g.append('g')
+                .selectAll('.node')
+                .data(nodes)
+                .enter().append('g')
+                .attr('class', d => 'node ' + d.type + '-node')
+                .call(d3.drag()
+                    .on('start', dragStarted)
+                    .on('drag', dragged)
+                    .on('end', dragEnded));
+            
+            // Add rectangles to nodes
+            node.append('rect')
+                .attr('width', d => d.width)
+                .attr('height', d => d.height)
+                .attr('x', d => -d.width / 2)
+                .attr('y', d => -d.height / 2);
+            
+            // Add text labels
+            node.append('text')
+                .text(d => d.label);
+            
+            // Add click behavior
+            node.on('click', function(event, d) {
+                if (d.type !== 'center') {
+                    vscode.postMessage({
+                        command: 'focusModule',
+                        moduleName: d.id
                     });
                 }
-                
-                // Render DOT content without animation
-                graphvizInstance
-                  .engine('dot') // Explicitly specify layout engine
-                  .transition(() => null) // Disable transition effects
-                  .renderDot(dotContent)
-                  .on('end', async () => {
-                    console.log("Graph rendered successfully");
-                    
-                    // Get SVG element
-                    const svg = document.querySelector('#graph svg');
-                    if (!svg) {
-                      console.error("SVG element not found");
-                      return;
-                    }
-                    
-                    // Set center position and zoom behavior
-                    try {
-                      const width = svg.clientWidth || svg.parentElement.clientWidth;
-                      const height = svg.clientHeight || svg.parentElement.clientHeight;
-                      
-                      // Only recalculate center position when focusing on a module
-                      if (focusedModule) {
-                        console.log("Centering graph for focused module:", focusedModule);
-                        
-                        // Get bounding box of graph content
-                        const g = svg.querySelector('g');
-                        if (g) {
-                          const bbox = g.getBBox();
-                          
-                          // Calculate scale (to fit screen)
-                          let scale = Math.min(
-                            width / (bbox.width + 100), 
-                            height / (bbox.height + 100)
-                          );
-                          scale = Math.min(scale, 1.0); // Limit to prevent excessive zoom
-                          
-                          // Calculate transform to move to center position
-                          const transform = d3.zoomIdentity
-                            .translate(
-                              (width - bbox.width * scale) / 2 - bbox.x * scale,
-                              (height - bbox.height * scale) / 2 - bbox.y * scale
-                            )
-                            .scale(scale);
-                          
-                          // Set zoom behavior and apply transform
-                          const zoom = d3.zoom()
-                            .scaleExtent([0.1, 10])
-                            .on('zoom', (event) => {
-                              g.setAttribute('transform', event.transform);
-                            });
-                          
-                          // Apply zoom behavior and initial transform
-                          d3.select(svg)
-                            .call(zoom)
-                            .call(zoom.transform, transform);
-                            
-                          console.log("Applied transform to center graph:", transform);
-                        }
-                      } else {
-                        // Only set zoom behavior if no focus
-                        const zoom = d3.zoom()
-                          .scaleExtent([0.1, 10])
-                          .on('zoom', (event) => {
-                            const g = svg.querySelector('g');
-                            if (g) g.setAttribute('transform', event.transform);
-                          });
-                        
-                        d3.select(svg).call(zoom);
-                      }
-                    } catch (e) {
-                      console.error("Error setting zoom behavior:", e);
-                    }
-                    
-                    // Add click events to nodes
-                    document.querySelectorAll('.node').forEach(node => {
-                      node.classList.add('module-node');
-                      
-                      // Remove previous event listeners and add new ones
-                      const newNode = node.cloneNode(true);
-                      node.parentNode.replaceChild(newNode, node);
-                      
-                      newNode.addEventListener('click', function(event) {
-                        event.stopPropagation();
-                        const title = this.querySelector('title')?.textContent;
-                        if (title) {
-                          console.log("Node clicked:", title);
-                          moduleClicked(title);
-                        }
-                      });
-                    });
-                    
-                    // Highlight selected module
-                    highlightSelectedModule();
-                    
-                    showStatusMessage("Graph ready - use mouse to zoom and drag");
-                  });
-                
-              } catch (e) {
-                console.error("Error rendering graph:", e);
-                showStatusMessage("Error rendering graph: " + e.message);
-              }
-            }
-            
-            // Module click handler
-            function moduleClicked(moduleName) {
-              console.log("Module clicked:", moduleName);
-              
-              const moduleInfo = moduleData.modules.find(m => m.name === moduleName);
-              if (!moduleInfo) return;
-              
-              // Update module selection
-              selectedModule = moduleName;
-              
-              document.getElementById('module-name').textContent = moduleInfo.name;
-              
-              // Display dependencies
-              const dependenciesEl = document.getElementById('dependencies');
-              dependenciesEl.innerHTML = '';
-              if (moduleInfo.dependencies.length === 0) {
-                dependenciesEl.innerHTML = '<li>None</li>';
-              } else {
-                moduleInfo.dependencies.forEach(dep => {
-                  const depInfo = moduleData.modules.find(m => m.name === dep);
-                  const li = document.createElement('li');
-                  li.className = 'dependency-item';
-                  li.textContent = dep;
-                  
-                  // Display file path if available
-                  if (depInfo && depInfo.file_path) {
-                    const filePathSpan = document.createElement('span');
-                    filePathSpan.className = 'file-path';
-                    filePathSpan.textContent = '(' + depInfo.file_path + ')';
-                    li.appendChild(filePathSpan);
-                  }
-                  
-                  // Add click event
-                  li.addEventListener('click', () => {
-                    if (depInfo && depInfo.file_path) {
-                      const line = depInfo.location ? depInfo.location.start : 1;
-                      vscode.postMessage({
-                        command: 'openFile',
-                        path: depInfo.file_path,
-                        line: line,
-                        moduleName: dep
-                      });
-                    } else {
-                      vscode.postMessage({
-                        command: 'openFile',
-                        path: null,
-                        line: 1,
-                        moduleName: dep
-                      });
-                      moduleClicked(dep);
-                    }
-                  });
-                  
-                  dependenciesEl.appendChild(li);
-                });
-              }
-              
-              // Display dependents
-              const dependentsEl = document.getElementById('dependents');
-              dependentsEl.innerHTML = '';
-              const dependents = moduleData.modules
-                .filter(m => m.dependencies.includes(moduleName))
-                .map(m => m.name);
-                
-              if (dependents.length === 0) {
-                dependentsEl.innerHTML = '<li>None</li>';
-              } else {
-                dependents.forEach(dep => {
-                  const depInfo = moduleData.modules.find(m => m.name === dep);
-                  const li = document.createElement('li');
-                  li.className = 'dependency-item';
-                  li.textContent = dep;
-                  
-                  // Display file path if available
-                  if (depInfo && depInfo.file_path) {
-                    const filePathSpan = document.createElement('span');
-                    filePathSpan.className = 'file-path';
-                    filePathSpan.textContent = '(' + depInfo.file_path + ')';
-                    li.appendChild(filePathSpan);
-                  }
-                  
-                  // Add click event
-                  li.addEventListener('click', () => {
-                    if (depInfo && depInfo.file_path) {
-                      const line = depInfo.location ? depInfo.location.start : 1;
-                      vscode.postMessage({
-                        command: 'openFile',
-                        path: depInfo.file_path,
-                        line: line,
-                        moduleName: dep
-                      });
-                    } else {
-                      vscode.postMessage({
-                        command: 'openFile',
-                        path: null,
-                        line: 1,
-                        moduleName: dep
-                      });
-                      moduleClicked(dep);
-                    }
-                  });
-                  
-                  dependentsEl.appendChild(li);
-                });
-              }
-
-              console.log("Module info:", {name: moduleInfo.name, path: moduleInfo.file_path, loc: moduleInfo.location});
-              
-              // Send request to focus on this module
-              showStatusMessage("Analyzing dependencies for " + moduleName + "...");
-              vscode.postMessage({
-                command: 'focusModule',
-                moduleName: moduleName
-              });
-            }
-            
-            // Message listener for communication with vscode
-            window.addEventListener('message', event => {
-              const message = event.data;
-              console.log("Received message from VS Code:", message.command);
-              
-              switch (message.command) {
-                case 'updateGraph':
-                  console.log("Received new graph data");
-                  
-                  // Update the graph with new dot content
-                  if (message.dotContent) {
-                    console.log("Rendering new graph data for module:", message.focusedModule);
-                    // Use integrated renderGraph function - pass dotContent and selected module
-                    renderGraph(message.dotContent, message.focusedModule);
-                  } else {
-                    showStatusMessage("Received empty graph data");
-                  }
-                  break;
-              }
             });
             
-            // Let VS Code know the webview is ready
-            console.log("Webview initialized, notifying VS Code");
-            vscode.postMessage({ command: 'webviewReady' });
+            // Add zoom behavior
+            const zoom = d3.zoom()
+                .scaleExtent([0.2, 3])
+                .on('zoom', event => {
+                    g.attr('transform', event.transform);
+                });
             
-            // Initial graph rendering
-            console.log("Starting initial graph rendering");
-            renderGraph(\`${dotContent.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\${/g, '\\${')}\`);
-          } catch (e) {
-            console.error("Fatal error in webview script:", e);
-            document.body.innerHTML = "<h1>Error initializing dependency visualizer</h1><pre>" + e.toString() + "</pre>";
-          }
-        })();
-      </script>
-    </body>
-    </html>
-  `;
+            svg.call(zoom);
+            
+            // Initial zoom to fit content
+            const initialTransform = d3.zoomIdentity
+                .translate(width / 2, height / 2)
+                .scale(0.8)
+                .translate(-width / 2, -height / 2);
+            
+            svg.call(zoom.transform, initialTransform);
+            
+            // Update positions on each tick
+            function ticked() {
+                // Update link paths
+                link.attr('d', d => {
+                    // Direct connection line with slight curve
+                    const sourceNode = nodes.find(n => n.id === d.source.id || n.id === d.source);
+                    const targetNode = nodes.find(n => n.id === d.target.id || n.id === d.target);
+                    
+                    if (!sourceNode || !targetNode) return '';
+                    
+                    const sourceX = d.source.x || sourceNode.x || 0;
+                    const sourceY = d.source.y || sourceNode.y || 0;
+                    const targetX = d.target.x || targetNode.x || 0;
+                    const targetY = d.target.y || targetNode.y || 0;
+                    
+                    const dx = targetX - sourceX;
+                    const dy = targetY - sourceY;
+                    const dr = Math.sqrt(dx * dx + dy * dy) * 1.5;
+                    
+                    return "M" + sourceX + "," + sourceY + "A" + dr + "," + dr + " 0 0,1 " + targetX + "," + targetY;
+                });
+                
+                // Update node positions
+                node.attr('transform', d => "translate(" + (d.x || 0) + "," + (d.y || 0) + ")");
+            }
+            
+            // Drag functions
+            function dragStarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            
+            function dragEnded(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+        
+        function renderFullGraph(width, height) {
+            // Basic visualization for all modules
+            // Create nodes for all modules
+            const nodes = data.modules.map(module => ({
+                id: module.name,
+                label: module.name,
+                width: Math.max(module.name.length * 10, 100),
+                height: 40
+            }));
+            
+            // Create links for all dependencies
+            const links = [];
+            data.modules.forEach(module => {
+                module.dependencies.forEach(dep => {
+                    const targetName = typeof dep === 'object' ? dep.name : dep;
+                    links.push({
+                        source: module.name,
+                        target: targetName
+                    });
+                });
+            });
+            
+            // Create SVG element
+            const svg = d3.select('#graph')
+                .attr('width', width)
+                .attr('height', height);
+            
+            // Clear any existing content
+            svg.selectAll('*').remove();
+            
+            // Add group for graph content with zoom behavior
+            const g = svg.append('g');
+            
+            // Add arrow markers for direction
+            svg.append('defs').append('marker')
+                .attr('id', 'arrow')
+                .attr('viewBox', '0 -5 10 10')
+                .attr('refX', 20)
+                .attr('refY', 0)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M0,-5L10,0L0,5')
+                .attr('fill', '#999');
+            
+            // Create the force simulation
+            const simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links).id(d => d.id).distance(150))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(d => Math.max(d.width, d.height) / 2 + 10))
+                .on('tick', ticked);
+            
+            // Create links
+            const link = g.append('g')
+                .selectAll('line')
+                .data(links)
+                .enter().append('path')
+                .attr('class', 'link')
+                .attr('marker-end', 'url(#arrow)');
+            
+            // Create node groups
+            const node = g.append('g')
+                .selectAll('.node')
+                .data(nodes)
+                .enter().append('g')
+                .attr('class', 'node')
+                .call(d3.drag()
+                    .on('start', dragStarted)
+                    .on('drag', dragged)
+                    .on('end', dragEnded));
+            
+            // Add rectangles to nodes
+            node.append('rect')
+                .attr('width', d => d.width)
+                .attr('height', d => d.height)
+                .attr('x', d => -d.width / 2)
+                .attr('y', d => -d.height / 2)
+                .attr('rx', 6)
+                .attr('ry', 6)
+                .style('fill', '#9CCC65')
+                .style('stroke', '#7CB342');
+            
+            // Add text labels
+            node.append('text')
+                .text(d => d.label);
+            
+            // Add click behavior
+            node.on('click', function(event, d) {
+                vscode.postMessage({
+                    command: 'focusModule',
+                    moduleName: d.id
+                });
+            });
+            
+            // Add zoom behavior
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 3])
+                .on('zoom', event => {
+                    g.attr('transform', event.transform);
+                });
+            
+            svg.call(zoom);
+            
+            // Update positions on each tick
+            function ticked() {
+                link.attr('d', d => {
+                    const dx = d.target.x - d.source.x;
+                    const dy = d.target.y - d.source.y;
+                    const dr = Math.sqrt(dx * dx + dy * dy) * 1.5;
+                    return "M" + d.source.x + "," + d.source.y + "A" + dr + "," + dr + " 0 0,1 " + d.target.x + "," + d.target.y;
+                });
+                
+                node.attr('transform', d => "translate(" + d.x + "," + d.y + ")");
+            }
+            
+            // Drag functions
+            function dragStarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            
+            function dragEnded(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+        
+        // Initialize graph
+        createGraph();
+        
+        // Handle resize
+        window.addEventListener('resize', () => {
+            createGraph();
+        });
+        
+        // Handle messages from VS Code
+        window.addEventListener('message', event => {
+            const message = event.data;
+            if (message.command === 'updateGraph') {
+                try {
+                    const updatedData = JSON.parse(message.jsonContent);
+                    data.modules = updatedData.modules;
+                    data.cycles = updatedData.cycles;
+                    data.metrics = updatedData.metrics;
+                    
+                    // Update center module if in focused mode
+                    if (isFocusedMode && message.focusedModule) {
+                      const foundModule = updatedData.modules.find(m => m.name === message.focusedModule);
+                      if (foundModule) {
+                        Object.assign(centerModule, foundModule);
+                      }
+                    }
+                    
+                    createGraph();
+                } catch (error) {
+                    console.error('Error updating graph:', error);
+                }
+            }
+        });
+        
+        // Notify VS Code that webview is ready
+        vscode.postMessage({ command: 'webviewReady' });
+    </script>
+</body>
+</html>`;
 
   // Create and display webview panel
   const panel = vscode.window.createWebviewPanel(
     'rescriptDepVisualizer',
-    isFocusedMode ? 'Module Dependencies' : 'ReScript Dependencies',
+    isFocusedMode && centerModule ? `Module: ${centerModule.name} Dependencies` : 'ReScript Dependencies',
     vscode.ViewColumn.One,
     {
       enableScripts: true,
@@ -959,27 +863,24 @@ function showGraphWebview(context: vscode.ExtensionContext, dotContent: string, 
               // Find CLI path
               const cliPath = await findRescriptDepCLI(context);
 
-              // Run rescriptdep with the module flag
-              progress.report({ message: 'Generating graph...' });
-              if (token.isCancellationRequested) return;
-
-              const dotContent = await runRescriptDep(cliPath, [
-                '--format=dot',
+              // Get JSON format data
+              const jsonContent = await runRescriptDep(cliPath, [
+                '--format=json',
                 '--module',
                 moduleName,
                 bsDir
               ]);
 
-              if (dotContent) {
-                // Send the new dot content back to the webview for update
-                console.log(`Sending updated graph data for module: ${moduleName}`);
+              if (jsonContent) {
+                // Send the new json content back to the webview for update
+                console.log(`Sending updated data for module: ${moduleName}`);
                 panel.webview.postMessage({
                   command: 'updateGraph',
-                  dotContent: dotContent,
+                  jsonContent: jsonContent,
                   focusedModule: moduleName
                 });
               } else {
-                vscode.window.showErrorMessage(`Failed to generate dependency graph for ${moduleName}`);
+                vscode.window.showErrorMessage(`Failed to generate dependency data for ${moduleName}`);
               }
             });
           } catch (error) {
@@ -995,109 +896,6 @@ function showGraphWebview(context: vscode.ExtensionContext, dotContent: string, 
     undefined,
     context.subscriptions
   );
-
-  // Ensure the webview is properly initialized before sending messages
-  panel.onDidChangeViewState(e => {
-    if (e.webviewPanel.visible) {
-      console.log("Webview became visible");
-    }
-  });
-}
-
-// Convert DOT file content to JSON data (extension of existing function)
-function parseDotContentAsJson(dotContent: string): DependencyData {
-  // Parse nodes and edges
-  const { nodes, edges } = parseDotContent(dotContent);
-
-  // Output debugging info to console
-  console.log("Parsed nodes:", nodes.length);
-  console.log("Parsed edges:", edges.length);
-
-  // Create empty base data
-  const data: DependencyData = {
-    modules: [],
-    cycles: [],
-    metrics: {
-      total_modules: nodes.length,
-      avg_fan_in: 0,
-      avg_fan_out: 0,
-      max_fan_in: 0,
-      max_fan_out: 0,
-      cyclic_modules: 0
-    }
-  };
-
-  // Process dependencies per node
-  nodes.forEach(nodeName => {
-    const dependencies = edges
-      .filter(edge => edge.source === nodeName)
-      .map(edge => edge.target);
-
-    const dependents = edges
-      .filter(edge => edge.target === nodeName)
-      .map(edge => edge.source);
-
-    const moduleNode: ModuleNode = {
-      name: nodeName,
-      dependencies: dependencies,
-      fan_in: dependents.length,
-      fan_out: dependencies.length,
-      in_cycle: false, // Default value
-      file_path: null,  // Default value
-      location: null    // Default value
-    };
-
-    data.modules.push(moduleNode);
-  });
-
-  // Get JSON data from actual CLI
-  // Request JSON format from CLI
-  try {
-    // Add temporary test data if modules are empty (for testing)
-    if (data.modules.length === 0) {
-      // Test data
-      data.modules.push({
-        name: "TestModule",
-        dependencies: ["DepModule1", "DepModule2"],
-        fan_in: 1,
-        fan_out: 2,
-        in_cycle: false,
-        file_path: "/path/to/file.res",
-        location: { start: 1, end: 20 }
-      });
-    }
-  } catch (error) {
-    console.error("Error processing module data:", error);
-  }
-
-  return data;
-}
-
-// Helper function to parse DOT content into a simple graph structure
-function parseDotContent(dotContent: string): { nodes: string[], edges: { source: string, target: string }[] } {
-  const nodes = new Set<string>();
-  const edges: { source: string, target: string }[] = [];
-
-  // Extract node definitions (basic regex parsing)
-  const nodeRegex = /"([^"]+)"/g;
-  let match;
-  while ((match = nodeRegex.exec(dotContent)) !== null) {
-    nodes.add(match[1]);
-  }
-
-  // Extract edges (basic regex parsing)
-  const edgeRegex = /"([^"]+)"\s*->\s*"([^"]+)"/g;
-  while ((match = edgeRegex.exec(dotContent)) !== null) {
-    edges.push({
-      source: match[1],
-      target: match[2]
-    });
-  }
-
-  return {
-    nodes: Array.from(nodes),
-    edges: edges
-  };
 }
 
 // Helper function to get webview URIs for local files
