@@ -526,7 +526,9 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 .attr('width', d => d.width)
                 .attr('height', d => d.height)
                 .attr('x', d => -d.width / 2)
-                .attr('y', d => -d.height / 2);
+                .attr('y', d => -d.height / 2)
+                .attr('rx', 6)
+                .attr('ry', 6);
             
             // Add text labels
             node.append('text')
