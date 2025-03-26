@@ -4,19 +4,70 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 
+// Command IDs
+const SHOW_DEPENDENCY_GRAPH = 'rescriptdep-visualizer.showDependencyGraph';
+const FOCUS_MODULE_DEPENDENCIES = 'rescriptdep-visualizer.focusModuleDependencies';
+const CLEAR_CACHE = 'rescriptdep-visualizer.clearCache';
+
 export function activate(context: vscode.ExtensionContext) {
   // Command for full dependency graph
-  let fullGraphCommand = vscode.commands.registerCommand('rescriptdep-visualizer.showDependencyGraph', async () => {
+  let fullGraphCommand = vscode.commands.registerCommand(SHOW_DEPENDENCY_GRAPH, async () => {
     await generateDependencyGraph(context);
   });
 
   // Command for module-focused dependency graph
-  let focusModuleCommand = vscode.commands.registerCommand('rescriptdep-visualizer.focusModuleDependencies', async () => {
+  let focusModuleCommand = vscode.commands.registerCommand(FOCUS_MODULE_DEPENDENCIES, async () => {
     await generateDependencyGraph(context, true);
+  });
+
+  // Command to clear the rescriptdep cache
+  let clearCacheCommand = vscode.commands.registerCommand(CLEAR_CACHE, async () => {
+    await clearRescriptDepCache(context);
   });
 
   context.subscriptions.push(fullGraphCommand);
   context.subscriptions.push(focusModuleCommand);
+  context.subscriptions.push(clearCacheCommand);
+}
+
+// Function to clear the rescriptdep cache
+async function clearRescriptDepCache(context: vscode.ExtensionContext): Promise<void> {
+  return vscode.window.withProgress({
+    location: vscode.ProgressLocation.Notification,
+    title: 'ReScript: Clearing dependency cache...',
+    cancellable: false
+  }, async (progress) => {
+    try {
+      // Get cache directory using globalStorageUri instead of globalStoragePath
+      const cacheDir = vscode.Uri.joinPath(context.globalStorageUri, 'cache');
+      const cacheDirPath = cacheDir.fsPath;
+
+      if (fs.existsSync(cacheDirPath)) {
+        // Read all files in the cache directory
+        const files = fs.readdirSync(cacheDirPath);
+
+        // Delete all cache files
+        let deletedCount = 0;
+        for (const file of files) {
+          if (file.endsWith('.rescriptdep_cache.marshal')) {
+            fs.unlinkSync(path.join(cacheDirPath, file));
+            deletedCount++;
+          }
+        }
+
+        if (deletedCount > 0) {
+          vscode.window.showInformationMessage(`ReScript Dependency: Cleared ${deletedCount} cache file(s)`);
+        } else {
+          vscode.window.showInformationMessage('No ReScript dependency cache files found');
+        }
+      } else {
+        vscode.window.showInformationMessage('No ReScript dependency cache directory found');
+      }
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+      vscode.window.showErrorMessage(`Failed to clear cache: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  });
 }
 
 // Helper function to get current module name from active editor
@@ -102,7 +153,7 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
         '--format=json',
         ...(moduleName ? ['--module', moduleName] : []),
         bsDir
-      ]);
+      ], context);
 
       // Display webview with the json data
       progress.report({ message: 'Generating visualization...' });
@@ -202,11 +253,44 @@ function getBundledCLIPath(extensionPath: string): string {
 }
 
 // Run CLI with arguments
-async function runRescriptDep(cliPath: string, args: string[]): Promise<string> {
+async function runRescriptDep(cliPath: string, args: string[], context?: vscode.ExtensionContext): Promise<string> {
+  // Setup cache directory
+  let cacheArgs: string[] = [];
+
+  if (context) {
+    try {
+      // Create cache directory if it doesn't exist using globalStorageUri
+      const cacheDir = vscode.Uri.joinPath(context.globalStorageUri, 'cache');
+      const cacheDirPath = cacheDir.fsPath;
+      const storageDir = context.globalStorageUri.fsPath;
+
+      if (!fs.existsSync(storageDir)) {
+        fs.mkdirSync(storageDir, { recursive: true });
+      }
+
+      if (!fs.existsSync(cacheDirPath)) {
+        fs.mkdirSync(cacheDirPath, { recursive: true });
+      }
+
+      // Get workspace name to create a unique cache file per project
+      const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
+      const cacheFilePath = path.join(cacheDirPath, `${workspaceName}.rescriptdep_cache.marshal`);
+
+      // Add cache file argument
+      cacheArgs = ['--cache-file', cacheFilePath];
+    } catch (error) {
+      console.error('Error setting up cache directory:', error);
+      // Continue without cache if there's an error
+    }
+  }
+
+  // Merge the cache arguments with the provided arguments
+  const fullArgs = [...cacheArgs, ...args];
+
   return new Promise((resolve, reject) => {
     if (cliPath.includes('_build/default/bin') && cliPath.endsWith('main.exe')) {
       // Direct execution of built binary
-      cp.execFile(cliPath, args, (error, stdout) => {
+      cp.execFile(cliPath, fullArgs, (error, stdout) => {
         if (error) {
           reject(error);
           return;
@@ -217,7 +301,7 @@ async function runRescriptDep(cliPath: string, args: string[]): Promise<string> 
     }
 
     if (cliPath === 'rescriptdep') {
-      cp.exec(`rescriptdep ${args.join(' ')}`, (error, stdout) => {
+      cp.exec(`rescriptdep ${fullArgs.join(' ')}`, (error, stdout) => {
         if (error) {
           reject(error);
           return;
@@ -225,7 +309,7 @@ async function runRescriptDep(cliPath: string, args: string[]): Promise<string> 
         resolve(stdout.toString());
       });
     } else {
-      cp.execFile(cliPath, args, (error, stdout) => {
+      cp.execFile(cliPath, fullArgs, (error, stdout) => {
         if (error) {
           reject(error);
           return;
@@ -864,7 +948,7 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 '--module',
                 moduleName,
                 bsDir
-              ]);
+              ], context);
 
               if (jsonContent) {
                 // Send the new json content back to the webview for update

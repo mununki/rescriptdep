@@ -10,6 +10,117 @@ type module_info = {
   file_path : string option;
 }
 
+(* Cache management module *)
+module Cache = struct
+  (* Cache entry type including digest information *)
+  type cache_entry = { module_info : module_info }
+
+  (* Cache storage using file paths as keys *)
+  let cache_table = Hashtbl.create 100
+
+  (* Cache file path - where the cache will be stored on disk *)
+  let cache_file = ref None
+
+  (* Set the cache file path *)
+  let set_cache_file path = cache_file := Some path
+
+  (* Get the path of the cache file, creating default if needed *)
+  let get_cache_file () =
+    match !cache_file with
+    | Some path -> path
+    | None ->
+        let path =
+          Filename.concat (Sys.getcwd ()) ".rescriptdep_cache.marshal"
+        in
+        cache_file := Some path;
+        path
+
+  (* Initialize the cache from disk if available *)
+  let initialize ?(verbose = false) () =
+    let path = get_cache_file () in
+    if Sys.file_exists path then (
+      try
+        let ic = open_in_bin path in
+        let stored_cache : (string, cache_entry) Hashtbl.t =
+          Marshal.from_channel ic
+        in
+        close_in ic;
+
+        (* Transfer to our in-memory cache *)
+        Hashtbl.iter (fun k v -> Hashtbl.replace cache_table k v) stored_cache;
+
+        if verbose then
+          Printf.printf "Cache loaded from %s with %d entries\n" path
+            (Hashtbl.length cache_table);
+        true
+      with e ->
+        if verbose then
+          Printf.printf "Error loading cache: %s\n" (Printexc.to_string e);
+        false)
+    else (
+      if verbose then Printf.printf "No cache file found at %s\n" path;
+      false)
+
+  (* Save the cache to disk *)
+  let save ?(verbose = false) () =
+    let path = get_cache_file () in
+    try
+      let oc = open_out_bin path in
+      Marshal.to_channel oc cache_table [];
+      close_out oc;
+      if verbose then
+        Printf.printf "Cache saved to %s with %d entries\n" path
+          (Hashtbl.length cache_table);
+      true
+    with e ->
+      if verbose then
+        Printf.printf "Error saving cache: %s\n" (Printexc.to_string e);
+      false
+
+  (* Add or update an entry in the cache *)
+  let add path module_info =
+    let entry = { module_info } in
+    Hashtbl.replace cache_table path entry
+
+  (* Find an entry in the cache, comparing digest information *)
+  let find ?(verbose = false) path current_interface_digest
+      current_source_digest =
+    match Hashtbl.find_opt cache_table path with
+    | None ->
+        if verbose then Printf.printf "Cache miss for %s\n" path;
+        None
+    | Some entry ->
+        (* Check if the digests match *)
+        let interface_match =
+          match
+            (entry.module_info.interface_digest, current_interface_digest)
+          with
+          | Some d1, Some d2 -> d1 = d2
+          | None, None -> true
+          | _ -> false
+        in
+
+        let implementation_match =
+          match
+            (entry.module_info.implementation_digest, current_source_digest)
+          with
+          | Some d1, Some d2 -> d1 = d2
+          | None, None -> true
+          | _ -> false
+        in
+
+        if interface_match && implementation_match then (
+          if verbose then Printf.printf "Cache hit for %s\n" path;
+          Some entry.module_info)
+        else (
+          if verbose then
+            Printf.printf "Cache invalid for %s (digest mismatch)\n" path;
+          None)
+
+  (* Clear the cache *)
+  let clear () = Hashtbl.clear cache_table
+end
+
 (* Exceptions *)
 exception Invalid_cmt_file of string
 
@@ -382,7 +493,7 @@ let parse_cmt_file ?(verbose = false) path =
     Printf.printf "Analyzing module: %s (file: %s)\n" module_name path;
 
   try
-    (* Use Cmt_format to read the file - with relaxed format checking *)
+    (* Check if file has a cached version with matching digests *)
     let cmt_info =
       try Cmt_format.read_cmt path
       with Cmt_format.Error msg ->
@@ -410,50 +521,84 @@ let parse_cmt_file ?(verbose = false) path =
         }
     in
 
-    (* Print cmt_sourcefile for debugging *)
-    (if verbose then
-       match cmt_info.Cmt_format.cmt_sourcefile with
-       | Some source_file ->
-           Printf.printf "cmt_sourcefile for %s: %s (extension: %s)\n"
-             module_name source_file
-             (try Filename.extension source_file with _ -> "none")
-       | None -> Printf.printf "No cmt_sourcefile found for %s\n" module_name);
+    (* Try to get from cache first using digest information *)
+    match
+      Cache.find ~verbose path cmt_info.cmt_interface_digest
+        cmt_info.cmt_source_digest
+    with
+    | Some cached_module_info ->
+        if verbose then
+          Printf.printf "Using cached module info for %s\n" module_name;
+        cached_module_info
+    | None ->
+        (* Continue with normal processing since no valid cache entry was found *)
+        if verbose then (
+          Printf.printf "Processing module %s from scratch\n" module_name;
+          (* Print digest information for debugging *)
+          (match cmt_info.cmt_interface_digest with
+          | Some digest ->
+              Printf.printf "Interface digest: %s\n" (Digest.to_hex digest)
+          | None -> Printf.printf "No interface digest available\n");
 
-    (* Extract dependencies using only the parsed cmt_info *)
-    let dependencies =
-      DependencyExtractor.extract_dependencies_from_cmt_info ~verbose cmt_info
-    in
+          match cmt_info.cmt_source_digest with
+          | Some digest ->
+              Printf.printf "Source digest: %s\n" (Digest.to_hex digest)
+          | None -> Printf.printf "No source digest available\n");
 
-    (* Filter out self-references and normalize *)
-    let filtered_deps =
-      dependencies
-      |> List.filter (fun name ->
-             normalize_module_name name <> module_name
-             && not (is_stdlib_or_internal_module name))
-      |> List.map normalize_module_name
-      |> List.sort_uniq compare
-    in
+        (* Print cmt_sourcefile for debugging *)
+        (if verbose then
+           match cmt_info.Cmt_format.cmt_sourcefile with
+           | Some source_file ->
+               Printf.printf "cmt_sourcefile for %s: %s (extension: %s)\n"
+                 module_name source_file
+                 (try Filename.extension source_file with _ -> "none")
+           | None ->
+               Printf.printf "No cmt_sourcefile found for %s\n" module_name);
 
-    (* Use cmt_sourcefile directly if available *)
-    let file_path =
-      match cmt_info.Cmt_format.cmt_sourcefile with
-      | Some source_file when Sys.file_exists source_file -> Some source_file
-      | _ -> (
-          if verbose then
-            Printf.printf "Using find_implementation_file fallback for %s\n"
-              module_name;
-          (* Fallback to the existing implementation if sourcefile doesn't exist *)
-          let impl_file = find_implementation_file ~verbose path in
-          match impl_file with Some file -> Some file | None -> Some path)
-    in
+        (* Extract dependencies using only the parsed cmt_info *)
+        let dependencies =
+          DependencyExtractor.extract_dependencies_from_cmt_info ~verbose
+            cmt_info
+        in
 
-    {
-      name = module_name;
-      dependencies = filtered_deps;
-      interface_digest = cmt_info.cmt_interface_digest;
-      implementation_digest = None;
-      file_path;
-    }
+        (* Filter out self-references and normalize *)
+        let filtered_deps =
+          dependencies
+          |> List.filter (fun name ->
+                 normalize_module_name name <> module_name
+                 && not (is_stdlib_or_internal_module name))
+          |> List.map normalize_module_name
+          |> List.sort_uniq compare
+        in
+
+        (* Use cmt_sourcefile directly if available *)
+        let file_path =
+          match cmt_info.Cmt_format.cmt_sourcefile with
+          | Some source_file when Sys.file_exists source_file ->
+              Some source_file
+          | _ -> (
+              if verbose then
+                Printf.printf "Using find_implementation_file fallback for %s\n"
+                  module_name;
+              (* Fallback to the existing implementation if sourcefile doesn't exist *)
+              let impl_file = find_implementation_file ~verbose path in
+              match impl_file with Some file -> Some file | None -> Some path)
+        in
+
+        let module_info =
+          {
+            name = module_name;
+            dependencies = filtered_deps;
+            interface_digest = cmt_info.cmt_interface_digest;
+            implementation_digest = cmt_info.cmt_source_digest;
+            file_path;
+          }
+        in
+
+        (* Add to cache *)
+        Cache.add path module_info;
+
+        module_info
   with
   | Invalid_cmt_file _ as e -> raise e
   | Sys_error msg ->
@@ -510,10 +655,8 @@ let chunk_list chunk_size lst =
   let rec aux acc current n = function
     | [] -> List.rev (if current = [] then acc else List.rev current :: acc)
     | hd :: tl ->
-        if n = 0 then
-          aux (List.rev current :: acc) [hd] (chunk_size - 1) tl
-        else
-          aux acc (hd :: current) (n - 1) tl
+        if n = 0 then aux (List.rev current :: acc) [ hd ] (chunk_size - 1) tl
+        else aux acc (hd :: current) (n - 1) tl
   in
   aux [] [] chunk_size lst
 
@@ -521,28 +664,28 @@ let chunk_list chunk_size lst =
 let parse_files_or_dirs ?(verbose = false) paths =
   (* Initialize benchmarking *)
   let benchmark = ref false in
-  let benchmark_start = ref (Unix.gettimeofday()) in
+  let benchmark_start = ref (Unix.gettimeofday ()) in
   let benchmark_points = ref [] in
-  
+
   (* Check if benchmarking is enabled via environment variable *)
-  begin
-    try 
-      benchmark := Sys.getenv "RESCRIPTDEP_BENCHMARK" = "1"
-    with Not_found -> ()
-  end;
-  
+  (try benchmark := Sys.getenv "RESCRIPTDEP_BENCHMARK" = "1"
+   with Not_found -> ());
+
   let bench_checkpoint name =
-    if !benchmark then begin
-      let current = Unix.gettimeofday() in
+    if !benchmark then (
+      let current = Unix.gettimeofday () in
       let elapsed = current -. !benchmark_start in
       benchmark_points := (name, elapsed) :: !benchmark_points;
       if verbose then
-        Printf.eprintf "[PARSER-BENCH] %s: %.4f seconds\n" name elapsed
-    end
+        Printf.eprintf "[PARSER-BENCH] %s: %.4f seconds\n" name elapsed)
   in
-  
-  if !benchmark then benchmark_start := Unix.gettimeofday();
+
+  if !benchmark then benchmark_start := Unix.gettimeofday ();
   bench_checkpoint "Parser started";
+
+  (* Initialize the cache system *)
+  let _ = Cache.initialize ~verbose () in
+  bench_checkpoint "Cache initialized";
 
   (* Collect all cmt files *)
   let collect_cmt_files paths =
@@ -554,12 +697,11 @@ let parse_files_or_dirs ?(verbose = false) paths =
             if verbose then Printf.printf "Scanning directory: %s\n" path;
             let dir_cmt_files = scan_directory path in
             cmt_files := dir_cmt_files @ !cmt_files;
-            collect rest
-          ) else if Filename.check_suffix path ".cmt" then (
+            collect rest)
+          else if Filename.check_suffix path ".cmt" then (
             cmt_files := path :: !cmt_files;
-            collect rest
-          ) else
-            collect rest
+            collect rest)
+          else collect rest
     in
     collect paths;
     !cmt_files
@@ -568,109 +710,124 @@ let parse_files_or_dirs ?(verbose = false) paths =
   (* First get the list of all project modules (recursively) *)
   bench_checkpoint "Start collecting project modules";
   let project_modules = get_project_modules ~verbose paths in
-  bench_checkpoint (Printf.sprintf "Collected %d project modules" (List.length project_modules));
-  
+  bench_checkpoint
+    (Printf.sprintf "Collected %d project modules"
+       (List.length project_modules));
+
   if verbose then
     Printf.printf "Project modules: %s\n" (String.concat ", " project_modules);
 
   (* Collect all CMT files to process *)
   bench_checkpoint "Start collecting CMT files";
   let cmt_files = collect_cmt_files paths in
-  bench_checkpoint (Printf.sprintf "Collected %d CMT files" (List.length cmt_files));
+  bench_checkpoint
+    (Printf.sprintf "Collected %d CMT files" (List.length cmt_files));
 
   (* Process a single file *)
   let process_file file =
     try
-      if verbose then
-        Printf.printf "Processing file: %s\n" file;
-      
+      if verbose then Printf.printf "Processing file: %s\n" file;
+
       let module_info = parse_cmt_file ~verbose file in
-      
+
       (* Filter dependencies to only include project modules *)
       let filtered_deps =
         List.filter
           (fun dep -> List.mem dep project_modules)
           module_info.dependencies
       in
-      
+
       Some { module_info with dependencies = filtered_deps }
     with Invalid_cmt_file msg ->
-      if verbose then
-        Printf.printf "Invalid cmt file: %s - %s\n" file msg;
+      if verbose then Printf.printf "Invalid cmt file: %s - %s\n" file msg;
       None
   in
 
   (* Process a chunk of files *)
-  let process_chunk chunk =
-    List.filter_map process_file chunk
-  in
+  let process_chunk chunk = List.filter_map process_file chunk in
 
   (* Configure parallel processing *)
-  let num_domains = 
+  let num_domains =
     try int_of_string (Sys.getenv "RESCRIPTDEP_DOMAINS")
-    with _ -> 
-      max 2 (min 8 (Domain.recommended_domain_count () - 1))
+    with _ -> max 2 (min 8 (Domain.recommended_domain_count () - 1))
   in
 
   let results =
     (* Process files sequentially if there are few files or parallel processing is limited *)
-    if List.length cmt_files < 20 || num_domains < 2 then begin
+    if List.length cmt_files < 20 || num_domains < 2 then (
       bench_checkpoint "Using sequential processing";
       let results = process_chunk cmt_files in
-      bench_checkpoint (Printf.sprintf "Sequential processing completed: %d modules" (List.length results));
-      results
-    end else begin
+      bench_checkpoint
+        (Printf.sprintf "Sequential processing completed: %d modules"
+           (List.length results));
+      results)
+    else (
       if verbose then
         Printf.printf "Using %d domains for parallel processing\n" num_domains;
 
       bench_checkpoint "Starting parallel processing";
-      
+
       (* Split files into chunks *)
       let chunk_size = max 1 (List.length cmt_files / num_domains) in
       let chunks = chunk_list chunk_size cmt_files in
-      
+
       if verbose then
-        Printf.printf "Split %d files into %d chunks of approx. size %d\n" 
+        Printf.printf "Split %d files into %d chunks of approx. size %d\n"
           (List.length cmt_files) (List.length chunks) chunk_size;
-      
+
       (* Create a queue for tasks to be processed by each domain *)
       let all_results = Atomic.make [] in
-      
+
       (* Create domains and assign tasks *)
-      let domains = 
-        List.mapi (fun i chunk ->
-          if verbose then 
-            Printf.printf "Starting domain %d with %d files\n" i (List.length chunk);
-          
-          Domain.spawn (fun () ->
-            let domain_results = process_chunk chunk in
-            
-            (* Update results atomically *)
-            let rec update () =
-              let current = Atomic.get all_results in
-              if not (Atomic.compare_and_set all_results current (domain_results @ current)) then
-                update ()
-            in
-            update ()
-          )
-        ) chunks
+      let domains =
+        List.mapi
+          (fun i chunk ->
+            if verbose then
+              Printf.printf "Starting domain %d with %d files\n" i
+                (List.length chunk);
+
+            Domain.spawn (fun () ->
+                let domain_results = process_chunk chunk in
+
+                (* Update results atomically *)
+                let rec update () =
+                  let current = Atomic.get all_results in
+                  if
+                    not
+                      (Atomic.compare_and_set all_results current
+                         (domain_results @ current))
+                  then update ()
+                in
+                update ()))
+          chunks
       in
-      
+
       (* Wait for all domains to complete *)
       List.iter Domain.join domains;
-      
+
       let final_results = Atomic.get all_results in
-      bench_checkpoint (Printf.sprintf "Parallel processing completed: %d modules" (List.length final_results));
-      
-      final_results
-    end
+      bench_checkpoint
+        (Printf.sprintf "Parallel processing completed: %d modules"
+           (List.length final_results));
+
+      final_results)
   in
 
-  if !benchmark && verbose then begin
+  (* After all files are processed, save the cache *)
+  let _ = bench_checkpoint "Processing completed" in
+  let _ = Cache.save ~verbose () in
+  bench_checkpoint "Cache saved";
+
+  if !benchmark && verbose then (
     Printf.eprintf "\n[PARSER-BENCH] Summary:\n";
-    List.rev !benchmark_points |> List.iter (fun (name, time) ->
-      Printf.eprintf "  %s: %.4f seconds\n" name time
-    );
-  end;
-  
+    List.rev !benchmark_points
+    |> List.iter (fun (name, time) ->
+           Printf.eprintf "  %s: %.4f seconds\n" name time));
+
   results
+
+(* Clear the module info cache *)
+let clear_cache () = Cache.clear ()
+
+(* Set the cache file path *)
+let set_cache_file path = Cache.set_cache_file path

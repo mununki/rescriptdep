@@ -1,71 +1,73 @@
-# vscode-rescriptdep README
+# ReScript Dependency Visualizer
 
-This is the README for your extension "vscode-rescriptdep". After writing up a brief description, we recommend including the following sections.
+A Visual Studio Code extension for visualizing dependencies between ReScript modules in your project. This extension helps you understand the structure and relationships in your ReScript codebase.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **Full Dependency Graph Visualization**: View the complete dependency graph of your ReScript project
+- **Module-Focused Views**: Focus on a specific module and see its direct dependencies and dependents
+- **Interactive Graph**: Click on modules to navigate through dependencies
+- **High Performance**: Uses digest-based caching to improve performance for large projects
 
-For example if there is an image subfolder under your extension project workspace:
+## Commands
 
-\!\[feature X\]\(images/feature-x.png\)
+This extension provides several commands in the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`):
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- **ReScript: Show Dependency Graph**: Shows the full dependency graph of your project
+- **ReScript: Focus On Module Dependencies**: Focuses on a specific module and its relationships
+- **ReScript: Clear Dependency Cache**: Clears the cached dependency data for improved accuracy after major changes
+
+## Cache Management
+
+The extension uses a caching mechanism to improve performance when analyzing module dependencies:
+
+- Cache files are stored in the extension's global storage area:
+  - Windows: `%APPDATA%\Code\User\globalStorage\yourpublisher.vscode-rescriptdep\cache`
+  - macOS: `~/Library/Application Support/Code/User/globalStorage/yourpublisher.vscode-rescriptdep/cache`
+  - Linux: `~/.config/Code/User/globalStorage/yourpublisher.vscode-rescriptdep/cache`
+- Each workspace gets its own cache file based on the workspace name
+- The cache is automatically invalidated when module files change (using digest comparison)
+- You can manually clear the cache using the "ReScript: Clear Dependency Cache" command
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- A ReScript project (with either `bsconfig.json` or `rescript.json` configuration file)
+- Compiled output in the `lib/bs` directory
+
+## Installation
+
+1. Install the extension from the VS Code Marketplace
+2. Open a ReScript project in VS Code
+3. Use the Command Palette to run the dependency visualization commands
+
+## Usage Tips
+
+1. **First Analysis**: The first analysis might take longer as it builds the initial cache
+2. **After Major Changes**: Clear the cache using the command if you've made significant changes to your codebase
+3. **Module Navigation**: Click on any module in the visualization to focus on that module
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+This extension doesn't require any specific settings.
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+- Please report any issues on the GitHub repository
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.0.1
 
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+- Initial release of ReScript Dependency Visualizer
+- Dependency graph visualization
+- Module-focused views
+- Caching for improved performance
 
 ---
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
 ## For more information
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+* [ReScript Language](https://rescript-lang.org/)
+* [GitHub Repository](https://github.com/yourname/vscode-rescriptdep)
 
 **Enjoy!**
