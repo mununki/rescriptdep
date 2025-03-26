@@ -2,6 +2,9 @@
    This module handles formatting and outputting dependency graphs
    in various formats like DOT graphs and JSON. *)
 
+open Stdlib
+open Parse_utils
+
 (* Output format types *)
 type format =
   | Dot
@@ -82,12 +85,23 @@ and output_dot graph out_channel =
 (* Output as JSON format *)
 and output_json graph out_channel =
   let modules = Dependency_graph.get_modules graph in
+  let metrics = Dependency_graph.calculate_metrics graph in
+  let cycles = Dependency_graph.find_all_cycles graph in
+
+  (* Get all source directories from module paths for dependency resolution *)
+  let source_dirs =
+    modules
+    |> List.filter_map (fun m -> Dependency_graph.get_module_path graph m)
+    |> List.map Filename.dirname
+    |> List.sort_uniq String.compare
+  in
 
   (* JSON opening *)
   output_string out_channel "{\n";
+
+  (* Output modules *)
   output_string out_channel "  \"modules\": [\n";
 
-  (* Output each module and its dependencies *)
   List.iteri
     (fun i module_name ->
       let deps = Dependency_graph.get_dependencies graph module_name in
@@ -114,8 +128,17 @@ and output_json graph out_channel =
             output_string out_channel "        {\n";
             output_string out_channel ("          \"name\": \"" ^ dep ^ "\"");
 
+            (* Try to resolve path if it's null *)
+            let resolved_path =
+              match dep_path with
+              | Some path_str -> Some path_str
+              | None ->
+                  (* Try to find implementation file for the dependency *)
+                  Parse_utils.find_implementation_file_by_name dep source_dirs
+            in
+
             (* Add dependency file path if available *)
-            (match dep_path with
+            (match resolved_path with
             | Some path_str ->
                 output_string out_channel
                   (",\n          \"path\": \"" ^ path_str ^ "\"")
@@ -136,19 +159,24 @@ and output_json graph out_channel =
         output_string out_channel "\n";
         List.iteri
           (fun j dependent ->
-            let dependent_metadata =
-              Dependency_graph.get_module_metadata graph dependent
+            let dependent_path =
+              match Dependency_graph.get_module_path graph dependent with
+              | Some path -> Some path
+              | None ->
+                  Parse_utils.find_implementation_file_by_name dependent
+                    source_dirs
             in
+
             output_string out_channel "        {\n";
             output_string out_channel
               ("          \"name\": \"" ^ dependent ^ "\"");
 
             (* Add dependent file path if available *)
-            (match dependent_metadata with
-            | { path = Some path; _ } ->
+            (match dependent_path with
+            | Some path ->
                 output_string out_channel
                   (",\n          \"path\": \"" ^ path ^ "\"")
-            | _ -> output_string out_channel ",\n          \"path\": null");
+            | None -> output_string out_channel ",\n          \"path\": null");
 
             output_string out_channel "\n        }";
             if j < List.length dependents - 1 then
@@ -183,7 +211,6 @@ and output_json graph out_channel =
   output_string out_channel "  ],\n";
 
   (* Output cycles information *)
-  let cycles = Dependency_graph.find_all_cycles graph in
   output_string out_channel "  \"cycles\": [";
 
   if cycles <> [] then (
@@ -205,7 +232,6 @@ and output_json graph out_channel =
   output_string out_channel "],\n";
 
   (* Calculate and output metrics *)
-  let metrics = Dependency_graph.calculate_metrics graph in
   output_string out_channel "  \"metrics\": {\n";
   output_string out_channel
     ("    \"total_modules\": " ^ string_of_int (List.length modules) ^ ",\n");

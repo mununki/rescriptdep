@@ -1,4 +1,5 @@
 open Stdlib
+open Parse_utils
 
 (* Module info representation *)
 type module_info = {
@@ -68,14 +69,6 @@ let is_stdlib_or_internal_module name =
       || String.starts_with ~prefix:"Js_" name
       || String.starts_with ~prefix:"Belt_" name)
     stdlib_modules
-
-(* Normalize module name to ensure consistent casing *)
-let normalize_module_name name =
-  (* Ensure first letter is uppercase and rest is preserved *)
-  if String.length name > 0 then
-    String.make 1 (Char.uppercase_ascii name.[0])
-    ^ String.sub name 1 (String.length name - 1)
-  else name
 
 (* Check if a string is a valid module name *)
 let is_valid_module_name str =
@@ -201,62 +194,18 @@ module DependencyExtractor = struct
   let extract_dependencies_from_cmt_info ?(verbose = false) cmt_info =
     let deps = ref [] in
 
-    (* Check source file path *)
-    let source_file_opt = cmt_info.Cmt_format.cmt_sourcefile in
+    (* Check source file path - directly use cmt_sourcefile *)
     let source_file =
-      match source_file_opt with
-      | Some path -> (
-          (* Try to convert .cmt file path to original source file (.res, .re, .ml) *)
-          let base_path = Filename.remove_extension path in
-          let dir_path = Filename.dirname path in
-          let base_name = Filename.basename base_path in
-
-          (* Configure possible directories to look for source files *)
-          let possible_dirs =
-            if
-              String.length path > 11
-              && String.sub path (String.length path - 11) 11 = "/lib/bs/src/"
-              || Str.string_match (Str.regexp ".*/lib/bs/src/.*") path 0
-            then
-              (* For ReScript projects, check src directory instead of lib/bs/src *)
-              let parts = Str.split (Str.regexp "/lib/bs/src/") path in
-              match parts with
-              | [ prefix; suffix ] ->
-                  [
-                    dir_path;
-                    Filename.concat prefix "src";
-                    Filename.concat (Filename.dirname dir_path) "src";
-                  ]
-              | _ -> [ dir_path ]
-            else [ dir_path; Filename.concat (Filename.dirname dir_path) "src" ]
-          in
-
-          (* Extension list *)
-          let extensions = [ ".res" ] in
-
-          (* Generate all possible file paths from directory and extension combinations *)
-          let candidates =
-            List.fold_left
-              (fun acc dir ->
-                List.fold_left
-                  (fun acc' ext ->
-                    Filename.concat dir (base_name ^ ext) :: acc')
-                  acc extensions)
-              [] possible_dirs
-          in
-
-          (* Return the first existing file or use the original path *)
-          try List.find Sys.file_exists candidates
-          with Not_found ->
-            if verbose then
-              Printf.printf "Source file not found for %s, using cmt path\n"
-                path;
-            path)
-      | None ->
+      match cmt_info.Cmt_format.cmt_sourcefile with
+      | Some path when Sys.file_exists path ->
           if verbose then
-            Printf.printf "No source file info in cmt for %s\n"
+            Printf.printf "Using cmt_sourcefile directly: %s\n" path;
+          path
+      | Some _ | None ->
+          if verbose then
+            Printf.printf "cmt_sourcefile not usable for %s\n"
               cmt_info.Cmt_format.cmt_modname;
-          "" (* No source file information available *)
+          "" (* No valid source file available *)
     in
 
     (* Extract module names directly from imports list *)
@@ -278,122 +227,150 @@ end
 
 (* Find the implementation file using various strategies *)
 let find_implementation_file ?(verbose = false) cmt_path =
-  (* Try to find .re or .res file by replacing .cmt extension *)
-  let base_path = Filename.remove_extension cmt_path in
-  let dir_path = Filename.dirname cmt_path in
-  let base_name = Filename.basename base_path in
-  let module_name = normalize_module_name base_name in
+  (* First, try direct path transformation from lib/bs/src to src *)
+  if Str.string_match (Str.regexp "\\(.*\\)/lib/bs/src\\(/.*\\)?$") cmt_path 0
+  then (
+    let project_root = Str.matched_group 1 cmt_path in
+    let base_name = Filename.basename (Filename.remove_extension cmt_path) in
 
-  (* Analyze possible search patterns *)
-  (* Common patterns in ReScript projects:
-     - lib/bs/src/X.cmt → src/X.res
-     - X.cmt → ./X.res 
-     - X.cmt → ../src/X.res
-     - X.cmt → ../../src/X.res *)
-
-  (* Search for source directories by finding project root directory *)
-  let rec find_src_dir current_dir depth =
-    if depth > 5 then [] (* Limit depth to prevent excessive searching *)
-    else
-      let src_dir = Filename.concat current_dir "src" in
-      if Sys.file_exists src_dir && Sys.is_directory src_dir then [ src_dir ]
-      else
-        let parent = Filename.dirname current_dir in
-        if parent = current_dir then [] (* When reached the root directory *)
-        else find_src_dir parent (depth + 1)
-  in
-
-  (* Track related src directories by finding bs directory *)
-  let is_bs_path path =
-    let parts =
-      String.split_on_char '/'
-        (String.concat "/" (String.split_on_char '\\' path))
+    let rel_path =
+      try
+        let sub_path = Str.matched_group 2 cmt_path in
+        if sub_path = "" then base_name
+        else
+          let sub_dir = String.sub sub_path 1 (String.length sub_path - 1) in
+          if Filename.basename sub_dir = base_name then sub_dir
+          else Filename.concat sub_dir base_name
+      with Not_found -> base_name
     in
-    List.exists
-      (fun part -> part = "bs" || part = "lib" || part = "lib/bs")
-      parts
-  in
 
-  (* Try to move to '/../../../src' if 'lib/bs/src' pattern exists *)
-  let src_dirs_from_bs =
-    if is_bs_path cmt_path then
-      (* Find the src sibling directory two levels up for the lib/bs/src -> ~/src pattern *)
-      let bs_parent = Filename.dirname (Filename.dirname dir_path) in
-      let project_root = Filename.dirname bs_parent in
-      let src_dir = Filename.concat project_root "src" in
-      if Sys.file_exists src_dir && Sys.is_directory src_dir then [ src_dir ]
-      else []
-    else []
-  in
-
-  (* Find src directory from current directory *)
-  let current_src_dirs = find_src_dir dir_path 0 in
-
-  (* Basic search directory list *)
-  let search_dirs =
-    [ dir_path; Filename.dirname dir_path ]
-    @ current_src_dirs @ src_dirs_from_bs
-  in
-
-  (* Remove duplicate search directories *)
-  let unique_dirs =
-    let rec remove_dups seen = function
-      | [] -> []
-      | dir :: rest ->
-          if List.mem dir seen then remove_dups seen rest
-          else dir :: remove_dups (dir :: seen) rest
+    let src_path =
+      Filename.concat (Filename.concat project_root "src") rel_path
     in
-    remove_dups [] search_dirs
-  in
 
-  if verbose then Printf.printf "Search directory list:\n";
-  if verbose then Printf.printf "Search directory list:\n";
-  if verbose then
-    List.iter (fun dir -> Printf.printf "  - %s\n" dir) unique_dirs;
+    (* Try with different extensions *)
+    let extensions = [ ".res"; ".re"; ".ml" ] in
+    let candidates = List.map (fun ext -> src_path ^ ext) extensions in
 
-  (* Create target file list from each directory *)
-  let build_candidates dirs base exts =
-    List.fold_left
-      (fun acc dir ->
-        let dir_candidates =
-          List.map (fun ext -> Filename.concat dir (base ^ ext)) exts
+    try
+      let found = List.find Sys.file_exists candidates in
+      if verbose then
+        Printf.printf "Found source file with direct path conversion: %s\n"
+          found;
+      Some found
+    with Not_found ->
+      if verbose then
+        Printf.printf
+          "Direct path conversion failed for %s, trying other methods\n"
+          cmt_path;
+
+      (* Continue with existing implementation if direct conversion failed *)
+      (* Try to find .re or .res file by replacing .cmt extension *)
+      let base_path = Filename.remove_extension cmt_path in
+      let dir_path = Filename.dirname cmt_path in
+      let base_name = Filename.basename base_path in
+      let module_name = normalize_module_name base_name in
+
+      (* Search for source directories by finding project root directory *)
+      let rec find_src_dir current_dir depth =
+        if depth > 5 then [] (* Limit depth to prevent excessive searching *)
+        else
+          let src_dir = Filename.concat current_dir "src" in
+          if Sys.file_exists src_dir && Sys.is_directory src_dir then
+            [ src_dir ]
+          else
+            let parent = Filename.dirname current_dir in
+            if parent = current_dir then []
+              (* When reached the root directory *)
+            else find_src_dir parent (depth + 1)
+      in
+
+      (* Track related src directories by finding bs directory *)
+      let is_bs_path path =
+        let parts =
+          String.split_on_char '/'
+            (String.concat "/" (String.split_on_char '\\' path))
         in
-        acc @ dir_candidates)
-      [] dirs
-  in
+        List.exists
+          (fun part -> part = "bs" || part = "lib" || part = "lib/bs")
+          parts
+      in
 
-  (* Try multiple filename patterns *)
-  let name_patterns =
-    [ base_name; String.lowercase_ascii base_name; module_name ]
-  in
+      (* Try to move to '/../../../src' if 'lib/bs/src' pattern exists *)
+      let src_dirs_from_bs =
+        if is_bs_path cmt_path then
+          (* Find the src sibling directory two levels up for the lib/bs/src -> ~/src pattern *)
+          let bs_parent = Filename.dirname (Filename.dirname dir_path) in
+          let project_root = Filename.dirname bs_parent in
+          let src_dir = Filename.concat project_root "src" in
+          if Sys.file_exists src_dir && Sys.is_directory src_dir then
+            [ src_dir ]
+          else []
+        else []
+      in
 
-  let extensions = [ ".res"; ".re"; ".ml" ] in
+      (* Find src directory from current directory *)
+      let current_src_dirs = find_src_dir dir_path 0 in
 
-  (* Generate candidate files with various name patterns *)
-  (* Generate candidate files with various name patterns *)
-  let candidates =
-    List.fold_left
-      (fun acc pattern -> acc @ build_candidates unique_dirs pattern extensions)
-      [] name_patterns
-  in
+      (* Basic search directory list *)
+      let search_dirs =
+        [ dir_path; Filename.dirname dir_path ]
+        @ current_src_dirs @ src_dirs_from_bs
+      in
 
-  if verbose then
-    Printf.printf "Module: %s, number of search paths: %d\n" module_name
-      (List.length candidates);
-  if verbose then
-    Printf.printf "Module: %s, number of search paths: %d\n" module_name
-      (List.length candidates);
+      (* Remove duplicate search directories *)
+      let unique_dirs =
+        let rec remove_dups seen = function
+          | [] -> []
+          | dir :: rest ->
+              if List.mem dir seen then remove_dups seen rest
+              else dir :: remove_dups (dir :: seen) rest
+        in
+        remove_dups [] search_dirs
+      in
 
-  (* Return the first existing file from candidates *)
-  try
-    let found = List.find Sys.file_exists candidates in
-    if verbose then Printf.printf "Implementation file found: %s\n" found;
-    if verbose then Printf.printf "Implementation file found: %s\n" found;
-    Some found
-  with Not_found ->
-    if verbose then Printf.printf "Implementation file not found\n";
-    if verbose then Printf.printf "Implementation file not found\n";
-    None
+      if verbose then
+        List.iter (fun dir -> Printf.printf "  - %s\n" dir) unique_dirs;
+
+      (* Use the utility function from Parse_utils to find the implementation file *)
+      find_implementation_file_by_name ~verbose module_name unique_dirs)
+  else
+    (* If not a lib/bs/src path, use the original logic *)
+    let base_path = Filename.remove_extension cmt_path in
+    let dir_path = Filename.dirname cmt_path in
+    let base_name = Filename.basename base_path in
+    let module_name = normalize_module_name base_name in
+
+    (* Existing directory search logic *)
+    let rec find_src_dir current_dir depth =
+      if depth > 5 then []
+      else
+        let src_dir = Filename.concat current_dir "src" in
+        if Sys.file_exists src_dir && Sys.is_directory src_dir then [ src_dir ]
+        else
+          let parent = Filename.dirname current_dir in
+          if parent = current_dir then [] else find_src_dir parent (depth + 1)
+    in
+
+    let current_src_dirs = find_src_dir dir_path 0 in
+    let search_dirs =
+      [ dir_path; Filename.dirname dir_path ] @ current_src_dirs
+    in
+
+    let unique_dirs =
+      let rec remove_dups seen = function
+        | [] -> []
+        | dir :: rest ->
+            if List.mem dir seen then remove_dups seen rest
+            else dir :: remove_dups (dir :: seen) rest
+      in
+      remove_dups [] search_dirs
+    in
+
+    if verbose then
+      List.iter (fun dir -> Printf.printf "  - %s\n" dir) unique_dirs;
+
+    find_implementation_file_by_name ~verbose module_name unique_dirs
 
 (* Parse a cmt file and extract module information *)
 let parse_cmt_file ?(verbose = false) path =
@@ -401,8 +378,6 @@ let parse_cmt_file ?(verbose = false) path =
     Filename.basename path |> Filename.remove_extension |> normalize_module_name
   in
 
-  if verbose then
-    Printf.printf "Analyzing module: %s (file: %s)\n" module_name path;
   if verbose then
     Printf.printf "Analyzing module: %s (file: %s)\n" module_name path;
 
@@ -435,6 +410,15 @@ let parse_cmt_file ?(verbose = false) path =
         }
     in
 
+    (* Print cmt_sourcefile for debugging *)
+    (if verbose then
+       match cmt_info.Cmt_format.cmt_sourcefile with
+       | Some source_file ->
+           Printf.printf "cmt_sourcefile for %s: %s (extension: %s)\n"
+             module_name source_file
+             (try Filename.extension source_file with _ -> "none")
+       | None -> Printf.printf "No cmt_sourcefile found for %s\n" module_name);
+
     (* Extract dependencies using only the parsed cmt_info *)
     let dependencies =
       DependencyExtractor.extract_dependencies_from_cmt_info ~verbose cmt_info
@@ -450,12 +434,17 @@ let parse_cmt_file ?(verbose = false) path =
       |> List.sort_uniq compare
     in
 
-    (* Create the module info *)
-    let impl_file = find_implementation_file ~verbose path in
-
-    (* Set file path to implementation file, or .cmt file if not found *)
+    (* Use cmt_sourcefile directly if available *)
     let file_path =
-      match impl_file with Some file -> Some file | None -> Some path
+      match cmt_info.Cmt_format.cmt_sourcefile with
+      | Some source_file when Sys.file_exists source_file -> Some source_file
+      | _ -> (
+          if verbose then
+            Printf.printf "Using find_implementation_file fallback for %s\n"
+              module_name;
+          (* Fallback to the existing implementation if sourcefile doesn't exist *)
+          let impl_file = find_implementation_file ~verbose path in
+          match impl_file with Some file -> Some file | None -> Some path)
     in
 
     {

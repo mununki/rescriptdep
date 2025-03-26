@@ -239,16 +239,33 @@ let create_focused_graph graph center_module =
       }
     in
 
-    (* 4. Add modules that depend on the center module with their dependencies *)
+    (* 4. Add dependency modules and their metadata *)
     let result =
       List.fold_left
-        (fun acc m ->
-          let deps = get_dependencies graph m in
-          (* Filter dependencies to only include those that point to our center module *)
-          let filtered_deps = List.filter (fun d -> d = center_module) deps in
-          (* Preserve metadata - add dependent modules *)
-          let m_metadata = get_module_metadata graph m in
-          add acc m filtered_deps m_metadata.path)
+        (fun acc dep ->
+          if StringMap.mem dep graph.dependencies then
+            (* In a focused graph, we only care about dependencies of the center module,
+               not dependencies of dependencies, so we use empty list for deps *)
+            let dep_metadata = get_module_metadata graph dep in
+            add acc dep [] dep_metadata.path
+          else acc)
+        result center_deps
+    in
+
+    (* 5. Add dependent modules to the graph but only with edges to the center module *)
+    (* This ensures that when we call find_dependents on the center module, it returns
+       these modules, but they won't show their own dependencies *)
+    let result =
+      List.fold_left
+        (fun acc dependent ->
+          if
+            (not (StringMap.mem dependent acc.dependencies))
+            && dependent <> center_module
+          then
+            (* Add the dependent with just one dependency - the center module *)
+            let dependent_metadata = get_module_metadata graph dependent in
+            add acc dependent [ center_module ] dependent_metadata.path
+          else acc)
         result dependents
     in
 

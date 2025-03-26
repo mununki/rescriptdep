@@ -75,7 +75,7 @@ let main () =
       match !focus_module with
       | Some module_name ->
           let normalized_name =
-            Rescriptdep.Parser.normalize_module_name module_name
+            Rescriptdep.Parse_utils.normalize_module_name module_name
           in
           Rescriptdep.Dependency_graph.create_focused_graph graph
             normalized_name
