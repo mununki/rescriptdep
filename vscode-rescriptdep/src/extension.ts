@@ -127,12 +127,8 @@ async function findRescriptDepCLI(context: vscode.ExtensionContext): Promise<str
     // Move from VSCode extension directory to parent directory (OCaml project root)
     const ocamlProjectRoot = path.resolve(context.extensionPath, '..');
 
-    // Method 1: Use dune exec - execute command with dune exec
-    return `dune exec -- rescriptdep`;
-
-    // Or
-    // Method 2: Use _build path - directly reference compiled binary
-    // return path.join(ocamlProjectRoot, '_build', 'default', 'bin', 'main.exe');
+    // Use _build path - directly reference compiled binary
+    return path.join(ocamlProjectRoot, '_build', 'default', 'bin', 'main.exe');
   }
 
   // 1. Try bundled CLI first
@@ -208,12 +204,9 @@ function getBundledCLIPath(extensionPath: string): string {
 // Run CLI with arguments
 async function runRescriptDep(cliPath: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    if (cliPath.startsWith('dune exec')) {
-      const fullCommand = `${cliPath} ${args.join(' ')}`;
-
-      const rootDir = path.resolve(__dirname, '../..');
-
-      cp.exec(fullCommand, { cwd: rootDir }, (error, stdout) => {
+    if (cliPath.includes('_build/default/bin') && cliPath.endsWith('main.exe')) {
+      // Direct execution of built binary
+      cp.execFile(cliPath, args, (error, stdout) => {
         if (error) {
           reject(error);
           return;

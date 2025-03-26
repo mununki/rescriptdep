@@ -4,4 +4,4 @@
   (:standard -w -27-32-33-34-37-39-50-52))
  (public_name rescriptdep)
  (modules parse_utils parser formatter dependency_graph)
- (libraries str vendor))
+ (libraries str unix vendor))

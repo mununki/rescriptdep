@@ -505,35 +505,172 @@ let get_project_modules ?(verbose = false) paths =
 
   !project_modules
 
-(* Parse a list of files or directories *)
+(* Helper function to split a list into chunks *)
+let chunk_list chunk_size lst =
+  let rec aux acc current n = function
+    | [] -> List.rev (if current = [] then acc else List.rev current :: acc)
+    | hd :: tl ->
+        if n = 0 then
+          aux (List.rev current :: acc) [hd] (chunk_size - 1) tl
+        else
+          aux acc (hd :: current) (n - 1) tl
+  in
+  aux [] [] chunk_size lst
+
+(* Parse a list of files or directories with parallel processing *)
 let parse_files_or_dirs ?(verbose = false) paths =
+  (* Initialize benchmarking *)
+  let benchmark = ref false in
+  let benchmark_start = ref (Unix.gettimeofday()) in
+  let benchmark_points = ref [] in
+  
+  (* Check if benchmarking is enabled via environment variable *)
+  begin
+    try 
+      benchmark := Sys.getenv "RESCRIPTDEP_BENCHMARK" = "1"
+    with Not_found -> ()
+  end;
+  
+  let bench_checkpoint name =
+    if !benchmark then begin
+      let current = Unix.gettimeofday() in
+      let elapsed = current -. !benchmark_start in
+      benchmark_points := (name, elapsed) :: !benchmark_points;
+      if verbose then
+        Printf.eprintf "[PARSER-BENCH] %s: %.4f seconds\n" name elapsed
+    end
+  in
+  
+  if !benchmark then benchmark_start := Unix.gettimeofday();
+  bench_checkpoint "Parser started";
+
+  (* Collect all cmt files *)
+  let collect_cmt_files paths =
+    let cmt_files = ref [] in
+    let rec collect = function
+      | [] -> ()
+      | path :: rest ->
+          if Sys.is_directory path then (
+            if verbose then Printf.printf "Scanning directory: %s\n" path;
+            let dir_cmt_files = scan_directory path in
+            cmt_files := dir_cmt_files @ !cmt_files;
+            collect rest
+          ) else if Filename.check_suffix path ".cmt" then (
+            cmt_files := path :: !cmt_files;
+            collect rest
+          ) else
+            collect rest
+    in
+    collect paths;
+    !cmt_files
+  in
+
   (* First get the list of all project modules (recursively) *)
+  bench_checkpoint "Start collecting project modules";
   let project_modules = get_project_modules ~verbose paths in
+  bench_checkpoint (Printf.sprintf "Collected %d project modules" (List.length project_modules));
+  
   if verbose then
     Printf.printf "Project modules: %s\n" (String.concat ", " project_modules);
 
-  let rec process accum = function
-    | [] -> accum
-    | path :: rest ->
-        if Sys.is_directory path then
-          let cmt_files = scan_directory path in
-          process accum (cmt_files @ rest)
-        else if Filename.check_suffix path ".cmt" then (
-          try
-            let module_info = parse_cmt_file ~verbose path in
-            (* Filter dependencies to only include project modules *)
-            let filtered_deps =
-              List.filter
-                (fun dep -> List.mem dep project_modules)
-                module_info.dependencies
-            in
-            let updated_info =
-              { module_info with dependencies = filtered_deps }
-            in
-            process (updated_info :: accum) rest
-          with Invalid_cmt_file msg ->
-            Printf.eprintf "Warning: %s\n" msg;
-            process accum rest)
-        else process accum rest
+  (* Collect all CMT files to process *)
+  bench_checkpoint "Start collecting CMT files";
+  let cmt_files = collect_cmt_files paths in
+  bench_checkpoint (Printf.sprintf "Collected %d CMT files" (List.length cmt_files));
+
+  (* Process a single file *)
+  let process_file file =
+    try
+      if verbose then
+        Printf.printf "Processing file: %s\n" file;
+      
+      let module_info = parse_cmt_file ~verbose file in
+      
+      (* Filter dependencies to only include project modules *)
+      let filtered_deps =
+        List.filter
+          (fun dep -> List.mem dep project_modules)
+          module_info.dependencies
+      in
+      
+      Some { module_info with dependencies = filtered_deps }
+    with Invalid_cmt_file msg ->
+      if verbose then
+        Printf.printf "Invalid cmt file: %s - %s\n" file msg;
+      None
   in
-  process [] paths
+
+  (* Process a chunk of files *)
+  let process_chunk chunk =
+    List.filter_map process_file chunk
+  in
+
+  (* Configure parallel processing *)
+  let num_domains = 
+    try int_of_string (Sys.getenv "RESCRIPTDEP_DOMAINS")
+    with _ -> 
+      max 2 (min 8 (Domain.recommended_domain_count () - 1))
+  in
+
+  let results =
+    (* Process files sequentially if there are few files or parallel processing is limited *)
+    if List.length cmt_files < 20 || num_domains < 2 then begin
+      bench_checkpoint "Using sequential processing";
+      let results = process_chunk cmt_files in
+      bench_checkpoint (Printf.sprintf "Sequential processing completed: %d modules" (List.length results));
+      results
+    end else begin
+      if verbose then
+        Printf.printf "Using %d domains for parallel processing\n" num_domains;
+
+      bench_checkpoint "Starting parallel processing";
+      
+      (* Split files into chunks *)
+      let chunk_size = max 1 (List.length cmt_files / num_domains) in
+      let chunks = chunk_list chunk_size cmt_files in
+      
+      if verbose then
+        Printf.printf "Split %d files into %d chunks of approx. size %d\n" 
+          (List.length cmt_files) (List.length chunks) chunk_size;
+      
+      (* Create a queue for tasks to be processed by each domain *)
+      let all_results = Atomic.make [] in
+      
+      (* Create domains and assign tasks *)
+      let domains = 
+        List.mapi (fun i chunk ->
+          if verbose then 
+            Printf.printf "Starting domain %d with %d files\n" i (List.length chunk);
+          
+          Domain.spawn (fun () ->
+            let domain_results = process_chunk chunk in
+            
+            (* Update results atomically *)
+            let rec update () =
+              let current = Atomic.get all_results in
+              if not (Atomic.compare_and_set all_results current (domain_results @ current)) then
+                update ()
+            in
+            update ()
+          )
+        ) chunks
+      in
+      
+      (* Wait for all domains to complete *)
+      List.iter Domain.join domains;
+      
+      let final_results = Atomic.get all_results in
+      bench_checkpoint (Printf.sprintf "Parallel processing completed: %d modules" (List.length final_results));
+      
+      final_results
+    end
+  in
+
+  if !benchmark && verbose then begin
+    Printf.eprintf "\n[PARSER-BENCH] Summary:\n";
+    List.rev !benchmark_points |> List.iter (fun (name, time) ->
+      Printf.eprintf "  %s: %.4f seconds\n" name time
+    );
+  end;
+  
+  results

@@ -22,9 +22,8 @@
   "A tool to analyze dependencies between ReScript modules using cmi files")
  (depends
   (ocaml
-   (= 4.14.0))
-  (dune
-   (= 3.16.0))
+   (= 5.3.0))
+  dune
   (odoc :with-doc))
  (tags
   (topics "dependency analysis" "ReScript" "OCaml")))

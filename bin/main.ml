@@ -5,6 +5,7 @@ let output_file = ref None
 let format = ref Rescriptdep.Formatter.Dot
 let focus_module = ref None
 let verbose = ref false
+let benchmark = ref false
 
 let spec_list =
   [
@@ -42,6 +43,8 @@ let spec_list =
       "Focus on specific module and its dependencies" );
     ("-v", Arg.Set verbose, "Enable verbose output");
     ("--verbose", Arg.Set verbose, "Enable verbose output");
+    ("-b", Arg.Set benchmark, "Enable performance benchmarking");
+    ("--benchmark", Arg.Set benchmark, "Enable performance benchmarking");
   ]
 
 let anon_fun file = input_files := file :: !input_files
@@ -60,15 +63,30 @@ let main () =
     exit 1);
 
   try
+    (* Initialize timing *)
+    let start_time = Unix.gettimeofday () in
+    let time_checkpoint name =
+      if !benchmark then
+        let current = Unix.gettimeofday () in
+        let elapsed = current -. start_time in
+        Printf.eprintf "[BENCH] %s: %.4f seconds\n" name elapsed
+    in
+
+    time_checkpoint "Start";
+
     (* Parse files and directories to get module infos *)
     let module_infos =
       Rescriptdep.Parser.parse_files_or_dirs ~verbose:!verbose !input_files
     in
 
+    time_checkpoint "Parsing completed";
+
     (* Build dependency graph *)
     let graph =
       Rescriptdep.Dependency_graph.build_from_module_infos module_infos
     in
+
+    time_checkpoint "Graph building completed";
 
     (* Apply module focus if specified *)
     let focused_graph =
@@ -77,8 +95,12 @@ let main () =
           let normalized_name =
             Rescriptdep.Parse_utils.normalize_module_name module_name
           in
-          Rescriptdep.Dependency_graph.create_focused_graph graph
-            normalized_name
+          let result =
+            Rescriptdep.Dependency_graph.create_focused_graph graph
+              normalized_name
+          in
+          time_checkpoint "Module focusing completed";
+          result
       | None -> graph
     in
 
@@ -101,7 +123,13 @@ let main () =
         if !verbose then Printf.eprintf "Writing output to stdout\n";
         Rescriptdep.Formatter.output_graph !format focused_graph stdout);
 
-    exit 0
+    time_checkpoint "Output generation completed";
+
+    if !benchmark then (
+      let total_time = Unix.gettimeofday () -. start_time in
+      Printf.eprintf "[BENCH] Total execution time: %.4f seconds\n" total_time;
+
+      exit 0)
   with
   | Rescriptdep.Parser.Invalid_cmt_file msg ->
       Printf.eprintf "Error: %s\n" msg;
