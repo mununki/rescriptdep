@@ -77,9 +77,9 @@ let is_stdlib_or_internal_module name =
 
 (* Test execution function *)
 let test_cmt_imports () =
-  let cmt_file = "test/fixtures/WebView.cmt" in
+  let cmt_file = "fixtures/math.cmt" in
 
-  printf "=== Testing cmt_imports for WebView.cmt file ===\n";
+  printf "=== Testing cmt_imports for math.cmt file ===\n";
 
   try
     (* Read cmt file *)
@@ -96,7 +96,7 @@ let test_cmt_imports () =
     in
 
     (* Output results *)
-    printf "cmt_imports found in WebView.cmt file excluding stdlib modules:\n";
+    printf "cmt_imports found in math.cmt file excluding stdlib modules:\n";
     List.iter
       (fun (module_name, digest_opt) ->
         match digest_opt with

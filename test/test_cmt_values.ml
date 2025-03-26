@@ -85,9 +85,7 @@ let test_cmt_file_values cmt_file =
 
 (* Main function to test multiple cmt files *)
 let test_cmt_values () =
-  let files =
-    [ "test/fixtures/WebView.cmt"; "test/fixtures/FollowUtils.cmt" ]
-  in
+  let files = [ "fixtures/math.cmt"; "fixtures/app.cmt" ] in
 
   let results = List.map test_cmt_file_values files in
   List.for_all (fun x -> x) results

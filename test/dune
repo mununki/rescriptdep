@@ -1,3 +1,9 @@
 (tests
  (names test_rescriptdep test_cmt_imports test_cmt_values)
- (libraries rescriptdep str))
+ (libraries rescriptdep str)
+ (deps
+  (glob_files fixtures/*.cmt)))
+
+(dirs :standard fixtures)
+
+(data_only_dirs fixtures)
