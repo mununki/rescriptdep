@@ -2,7 +2,7 @@
   "name": "vscode-rescriptdep",
   "displayName": "ReScript Dependency Visualizer",
   "description": "A tool to analyze dependencies between ReScript modules",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "engines": {
     "vscode": "^1.97.0"
   },
