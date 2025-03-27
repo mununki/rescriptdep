@@ -15,6 +15,10 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -24,7 +28,7 @@ jobs:
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: 5.3.0
-          dune-cache: true
+          dune-cache: false
       - name: Get version
         id: get_version
         run: |
@@ -69,6 +73,10 @@ jobs:
           else
             echo "VERSION=latest" >> $GITHUB_OUTPUT
           fi
+      - name: Initialize opam
+        run: |
+          opam init --disable-sandboxing -y
+          opam switch list
       - name: Install OCaml dependencies
         run: |
           eval $(opam env)
