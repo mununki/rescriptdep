@@ -5,11 +5,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 
 // Command IDs
-const SHOW_DEPENDENCY_GRAPH = 'rescriptdep-visualizer.showDependencyGraph';
-const FOCUS_MODULE_DEPENDENCIES = 'rescriptdep-visualizer.focusModuleDependencies';
-const CLEAR_CACHE = 'rescriptdep-visualizer.clearCache';
+const SHOW_DEPENDENCY_GRAPH = 'bibimbob.showDependencyGraph';
+const FOCUS_MODULE_DEPENDENCIES = 'bibimbob.focusModuleDependencies';
+const CLEAR_CACHE = 'bibimbob.clearCache';
 
 export function activate(context: vscode.ExtensionContext) {
+  console.log('Bibimbob is activated');
   // Command for full dependency graph
   let fullGraphCommand = vscode.commands.registerCommand(SHOW_DEPENDENCY_GRAPH, async () => {
     await generateDependencyGraph(context);
@@ -913,7 +914,7 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
 
   // Create and display webview panel
   const panel = vscode.window.createWebviewPanel(
-    'rescriptDepVisualizer',
+    'bibimbobVisualizer',
     isFocusedMode && centerModule ? `Module: ${centerModule.name} Dependencies` : 'ReScript Dependencies',
     vscode.ViewColumn.One,
     {

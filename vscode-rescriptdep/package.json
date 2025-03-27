@@ -18,7 +18,7 @@
     "url": "https://github.com/mununki/rescriptdep/issues"
   },
   "engines": {
-    "vscode": "^1.98.0"
+    "vscode": "^1.97.0"
   },
   "categories": [
     "Other"
@@ -31,16 +31,16 @@
   "contributes": {
     "commands": [
       {
-        "command": "rescriptdep-visualizer.showDependencyGraph",
-        "title": "ReScript: Show Dependency Graph"
+        "command": "bibimbob.showDependencyGraph",
+        "title": "Bibimbob: Show Dependency Graph"
       },
       {
-        "command": "rescriptdep-visualizer.focusModuleDependencies",
-        "title": "ReScript: Focus On Module Dependencies"
+        "command": "bibimbob.focusModuleDependencies",
+        "title": "Bibimbob: Focus On Module Dependencies"
       },
       {
-        "command": "rescriptdep-visualizer.clearCache",
-        "title": "ReScript: Clear Dependency Cache"
+        "command": "bibimbob.clearCache",
+        "title": "Bibimbob: Clear Dependency Cache"
       }
     ]
   },
