@@ -100,8 +100,11 @@ let main () =
       if !skip_cache then (
         if !verbose then Printf.eprintf "Skipping cache usage\n";
         Rescriptdep.Parser.clear_cache ();
-        Rescriptdep.Parser.parse_files_or_dirs ~verbose:!verbose !input_files)
-      else Rescriptdep.Parser.parse_files_or_dirs ~verbose:!verbose !input_files
+        Rescriptdep.Parser.parse_files_or_dirs ~verbose:!verbose
+          ~skip_cache:true !input_files)
+      else
+        Rescriptdep.Parser.parse_files_or_dirs ~verbose:!verbose
+          ~skip_cache:false !input_files
     in
 
     time_checkpoint "Parsing completed";

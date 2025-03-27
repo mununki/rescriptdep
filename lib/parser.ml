@@ -36,86 +36,105 @@ module Cache = struct
         path
 
   (* Initialize the cache from disk if available *)
-  let initialize ?(verbose = false) () =
-    let path = get_cache_file () in
-    if Sys.file_exists path then (
+  let initialize ?(verbose = false) ?(skip_cache = false) () =
+    (* Skip initialization if skip_cache is set *)
+    if skip_cache then (
+      if verbose then
+        Printf.printf "Skip cache flag is set, not loading cache\n";
+      false)
+    else
+      let path = get_cache_file () in
+      if Sys.file_exists path then (
+        try
+          let ic = open_in_bin path in
+          let stored_cache : (string, cache_entry) Hashtbl.t =
+            Marshal.from_channel ic
+          in
+          close_in ic;
+
+          (* Transfer to our in-memory cache *)
+          Hashtbl.iter (fun k v -> Hashtbl.replace cache_table k v) stored_cache;
+
+          if verbose then
+            Printf.printf "Cache loaded from %s with %d entries\n" path
+              (Hashtbl.length cache_table);
+          true
+        with e ->
+          if verbose then
+            Printf.printf "Error loading cache: %s\n" (Printexc.to_string e);
+          false)
+      else (
+        if verbose then Printf.printf "No cache file found at %s\n" path;
+        false)
+
+  (* Save the cache to disk *)
+  let save ?(verbose = false) ?(skip_cache = false) () =
+    (* Skip saving if skip_cache is set *)
+    if skip_cache then (
+      if verbose then Printf.printf "Skip cache flag is set, not saving cache\n";
+      false)
+    else
+      let path = get_cache_file () in
       try
-        let ic = open_in_bin path in
-        let stored_cache : (string, cache_entry) Hashtbl.t =
-          Marshal.from_channel ic
-        in
-        close_in ic;
-
-        (* Transfer to our in-memory cache *)
-        Hashtbl.iter (fun k v -> Hashtbl.replace cache_table k v) stored_cache;
-
+        let oc = open_out_bin path in
+        Marshal.to_channel oc cache_table [];
+        close_out oc;
         if verbose then
-          Printf.printf "Cache loaded from %s with %d entries\n" path
+          Printf.printf "Cache saved to %s with %d entries\n" path
             (Hashtbl.length cache_table);
         true
       with e ->
         if verbose then
-          Printf.printf "Error loading cache: %s\n" (Printexc.to_string e);
-        false)
-    else (
-      if verbose then Printf.printf "No cache file found at %s\n" path;
-      false)
-
-  (* Save the cache to disk *)
-  let save ?(verbose = false) () =
-    let path = get_cache_file () in
-    try
-      let oc = open_out_bin path in
-      Marshal.to_channel oc cache_table [];
-      close_out oc;
-      if verbose then
-        Printf.printf "Cache saved to %s with %d entries\n" path
-          (Hashtbl.length cache_table);
-      true
-    with e ->
-      if verbose then
-        Printf.printf "Error saving cache: %s\n" (Printexc.to_string e);
-      false
+          Printf.printf "Error saving cache: %s\n" (Printexc.to_string e);
+        false
 
   (* Add or update an entry in the cache *)
-  let add path module_info =
-    let entry = { module_info } in
-    Hashtbl.replace cache_table path entry
+  let add ?(skip_cache = false) path module_info =
+    (* Skip adding to cache if skip_cache is set *)
+    if not skip_cache then
+      let entry = { module_info } in
+      Hashtbl.replace cache_table path entry
 
   (* Find an entry in the cache, comparing digest information *)
-  let find ?(verbose = false) path current_interface_digest
-      current_source_digest =
-    match Hashtbl.find_opt cache_table path with
-    | None ->
-        if verbose then Printf.printf "Cache miss for %s\n" path;
-        None
-    | Some entry ->
-        (* Check if the digests match *)
-        let interface_match =
-          match
-            (entry.module_info.interface_digest, current_interface_digest)
-          with
-          | Some d1, Some d2 -> d1 = d2
-          | None, None -> true
-          | _ -> false
-        in
+  let find ?(verbose = false) ?(skip_cache = false) path
+      current_interface_digest current_source_digest =
+    (* Always return None if skip_cache is set *)
+    if skip_cache then (
+      if verbose then
+        Printf.printf "Skip cache flag is set, forcing cache miss for %s\n" path;
+      None)
+    else
+      match Hashtbl.find_opt cache_table path with
+      | None ->
+          if verbose then Printf.printf "Cache miss for %s\n" path;
+          None
+      | Some entry ->
+          (* Check if the digests match *)
+          let interface_match =
+            match
+              (entry.module_info.interface_digest, current_interface_digest)
+            with
+            | Some d1, Some d2 -> d1 = d2
+            | None, None -> true
+            | _ -> false
+          in
 
-        let implementation_match =
-          match
-            (entry.module_info.implementation_digest, current_source_digest)
-          with
-          | Some d1, Some d2 -> d1 = d2
-          | None, None -> true
-          | _ -> false
-        in
+          let implementation_match =
+            match
+              (entry.module_info.implementation_digest, current_source_digest)
+            with
+            | Some d1, Some d2 -> d1 = d2
+            | None, None -> true
+            | _ -> false
+          in
 
-        if interface_match && implementation_match then (
-          if verbose then Printf.printf "Cache hit for %s\n" path;
-          Some entry.module_info)
-        else (
-          if verbose then
-            Printf.printf "Cache invalid for %s (digest mismatch)\n" path;
-          None)
+          if interface_match && implementation_match then (
+            if verbose then Printf.printf "Cache hit for %s\n" path;
+            Some entry.module_info)
+          else (
+            if verbose then
+              Printf.printf "Cache invalid for %s (digest mismatch)\n" path;
+            None)
 
   (* Clear the cache *)
   let clear () = Hashtbl.clear cache_table
@@ -484,7 +503,7 @@ let find_implementation_file ?(verbose = false) cmt_path =
     find_implementation_file_by_name ~verbose module_name unique_dirs
 
 (* Parse a cmt file and extract module information *)
-let parse_cmt_file ?(verbose = false) path =
+let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
   let module_name =
     Filename.basename path |> Filename.remove_extension |> normalize_module_name
   in
@@ -523,7 +542,7 @@ let parse_cmt_file ?(verbose = false) path =
 
     (* Try to get from cache first using digest information *)
     match
-      Cache.find ~verbose path cmt_info.cmt_interface_digest
+      Cache.find ~verbose ~skip_cache path cmt_info.cmt_interface_digest
         cmt_info.cmt_source_digest
     with
     | Some cached_module_info ->
@@ -596,7 +615,7 @@ let parse_cmt_file ?(verbose = false) path =
         in
 
         (* Add to cache *)
-        Cache.add path module_info;
+        Cache.add ~skip_cache path module_info;
 
         module_info
   with
@@ -661,7 +680,7 @@ let chunk_list chunk_size lst =
   aux [] [] chunk_size lst
 
 (* Parse a list of files or directories with parallel processing *)
-let parse_files_or_dirs ?(verbose = false) paths =
+let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
   (* Initialize benchmarking *)
   let benchmark = ref false in
   let benchmark_start = ref (Unix.gettimeofday ()) in
@@ -684,8 +703,8 @@ let parse_files_or_dirs ?(verbose = false) paths =
   bench_checkpoint "Parser started";
 
   (* Initialize the cache system *)
-  let _ = Cache.initialize ~verbose () in
-  bench_checkpoint "Cache initialized";
+  let _ = Cache.initialize ~verbose ~skip_cache () in
+  bench_checkpoint "Cache initialization completed";
 
   (* Collect all cmt files *)
   let collect_cmt_files paths =
@@ -728,7 +747,7 @@ let parse_files_or_dirs ?(verbose = false) paths =
     try
       if verbose then Printf.printf "Processing file: %s\n" file;
 
-      let module_info = parse_cmt_file ~verbose file in
+      let module_info = parse_cmt_file ~verbose ~skip_cache file in
 
       (* Filter dependencies to only include project modules *)
       let filtered_deps =
@@ -749,7 +768,12 @@ let parse_files_or_dirs ?(verbose = false) paths =
   (* Configure parallel processing *)
   let num_domains =
     try int_of_string (Sys.getenv "RESCRIPTDEP_DOMAINS")
-    with _ -> max 2 (min 8 (Domain.recommended_domain_count () - 1))
+    with _ ->
+      (* Allocate more domains for better performance *)
+      let available = Domain.recommended_domain_count () in
+      min
+        (available * 3 / 2)
+        12 (* Use up to 150% of recommended but cap at 12 *)
   in
 
   let results =
@@ -763,59 +787,60 @@ let parse_files_or_dirs ?(verbose = false) paths =
       results)
     else (
       if verbose then
-        Printf.printf "Using %d domains for parallel processing\n" num_domains;
+        Printf.printf "Using Eio with %d workers for parallel processing\n"
+          num_domains;
 
-      bench_checkpoint "Starting parallel processing";
+      bench_checkpoint "Starting Eio parallel processing";
 
-      (* Split files into chunks *)
-      let chunk_size = max 1 (List.length cmt_files / num_domains) in
+      (* Use optimized chunking strategy *)
+      let total_files = List.length cmt_files in
+      (* Fewer but larger chunks for better performance - aim for at least 100 files per domain *)
+      let task_count = min num_domains (max 2 ((total_files / 100) + 1)) in
+      let chunk_size = (total_files + task_count - 1) / task_count in
       let chunks = chunk_list chunk_size cmt_files in
 
       if verbose then
         Printf.printf "Split %d files into %d chunks of approx. size %d\n"
-          (List.length cmt_files) (List.length chunks) chunk_size;
+          total_files (List.length chunks) chunk_size;
 
-      (* Create a queue for tasks to be processed by each domain *)
-      let all_results = Atomic.make [] in
+      (* Use Eio for parallel processing with optimizations *)
+      let results =
+        Eio_main.run @@ fun env ->
+        let domain_mgr = Eio.Stdenv.domain_mgr env in
 
-      (* Create domains and assign tasks *)
-      let domains =
-        List.mapi
-          (fun i chunk ->
-            if verbose then
-              Printf.printf "Starting domain %d with %d files\n" i
-                (List.length chunk);
+        (* Array to collect results *)
+        let chunk_results = Array.make (List.length chunks) [] in
 
-            Domain.spawn (fun () ->
-                let domain_results = process_chunk chunk in
-
-                (* Update results atomically *)
-                let rec update () =
-                  let current = Atomic.get all_results in
-                  if
-                    not
-                      (Atomic.compare_and_set all_results current
-                         (domain_results @ current))
-                  then update ()
+        (* Process chunks in parallel *)
+        Eio.Fiber.all
+          (List.mapi
+             (fun i chunk ->
+               fun () ->
+                (* Process chunk in a separate domain *)
+                let result =
+                  Eio.Domain_manager.run domain_mgr (fun () ->
+                      process_chunk chunk)
                 in
-                update ()))
-          chunks
+                (* Store result directly in array *)
+                chunk_results.(i) <- result)
+             chunks);
+
+        (* Combine results *)
+        Array.fold_left
+          (fun acc result -> List.rev_append result acc)
+          [] chunk_results
       in
 
-      (* Wait for all domains to complete *)
-      List.iter Domain.join domains;
-
-      let final_results = Atomic.get all_results in
       bench_checkpoint
-        (Printf.sprintf "Parallel processing completed: %d modules"
-           (List.length final_results));
+        (Printf.sprintf "Eio parallel processing completed: %d modules"
+           (List.length results));
 
-      final_results)
+      results)
   in
 
   (* After all files are processed, save the cache *)
   let _ = bench_checkpoint "Processing completed" in
-  let _ = Cache.save ~verbose () in
+  let _ = Cache.save ~verbose ~skip_cache () in
   bench_checkpoint "Cache saved";
 
   if !benchmark && verbose then (
@@ -831,3 +856,6 @@ let clear_cache () = Cache.clear ()
 
 (* Set the cache file path *)
 let set_cache_file path = Cache.set_cache_file path
+
+(* Set the skip cache flag - now just a stub since we pass skip_cache directly *)
+let set_skip_cache _flag = ()

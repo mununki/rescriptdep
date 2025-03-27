@@ -4,6 +4,18 @@
  (deps
   (glob_files fixtures/*.cmt)))
 
+(executable
+ (name benchmark)
+ (libraries rescriptdep str)
+ (modules benchmark))
+
+(rule
+ (alias bench)
+ (deps
+  (glob_files fixtures/*.cmt))
+ (action
+  (run ./benchmark.exe)))
+
 (dirs :standard fixtures)
 
 (data_only_dirs fixtures)

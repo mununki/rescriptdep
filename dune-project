@@ -25,6 +25,8 @@
   (ocaml
    (= 5.3.0))
   dune
+  eio
+  eio_main
   (odoc :with-doc))
  (tags
   (topics "dependency analysis" "ReScript" "OCaml")))

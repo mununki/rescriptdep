@@ -77,7 +77,23 @@ let is_stdlib_or_internal_module name =
 
 (* Test execution function *)
 let test_cmt_imports () =
-  let cmt_file = "fixtures/math.cmt" in
+  (* Get the directory of the test executable *)
+  let executable_dir = Filename.dirname Sys.executable_name in
+
+  (* Construct absolute path to the fixture file *)
+  let fix_path filename =
+    if Sys.file_exists filename then filename
+    else if Sys.file_exists (Filename.concat executable_dir filename) then
+      Filename.concat executable_dir filename
+    else if Sys.file_exists (Filename.concat "test" filename) then
+      Filename.concat "test" filename
+    else filename
+  in
+
+  let cmt_file = fix_path "fixtures/math.cmt" in
+
+  (* Print the path we're trying to use *)
+  printf "Trying to use path: %s\n" cmt_file;
 
   printf "=== Testing cmt_imports for math.cmt file ===\n";
 

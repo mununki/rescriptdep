@@ -85,7 +85,23 @@ let test_cmt_file_values cmt_file =
 
 (* Main function to test multiple cmt files *)
 let test_cmt_values () =
-  let files = [ "fixtures/math.cmt"; "fixtures/app.cmt" ] in
+  (* Get the directory of the test executable *)
+  let executable_dir = Filename.dirname Sys.executable_name in
+
+  (* Construct absolute paths to the fixture files *)
+  let fix_path filename =
+    if Sys.file_exists filename then filename
+    else if Sys.file_exists (Filename.concat executable_dir filename) then
+      Filename.concat executable_dir filename
+    else if Sys.file_exists (Filename.concat "test" filename) then
+      Filename.concat "test" filename
+    else filename
+  in
+
+  let files = List.map fix_path [ "fixtures/math.cmt"; "fixtures/app.cmt" ] in
+
+  (* Print the paths we're trying to use *)
+  List.iter (fun path -> Printf.printf "Trying to use path: %s\n" path) files;
 
   let results = List.map test_cmt_file_values files in
   List.for_all (fun x -> x) results
