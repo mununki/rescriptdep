@@ -32,7 +32,6 @@ This extension provides several commands in the Command Palette (`Ctrl+Shift+P` 
 The extension uses a caching mechanism to improve performance when analyzing module dependencies:
 
 - Cache files are stored in the extension's global storage area:
-  - Windows: `%APPDATA%\Code\User\globalStorage\yourpublisher.vscode-rescriptdep\cache`
   - macOS: `~/Library/Application Support/Code/User/globalStorage/yourpublisher.vscode-rescriptdep/cache`
   - Linux: `~/.config/Code/User/globalStorage/yourpublisher.vscode-rescriptdep/cache`
 - Each workspace gets its own cache file based on the workspace name
@@ -68,7 +67,7 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
-### 0.0.1
+### 0.1.0
 
 - Initial release of Bibimbob
 - Dependency graph visualization
