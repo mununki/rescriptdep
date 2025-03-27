@@ -102,13 +102,13 @@ jobs:
         run: |
           cd vscode-rescriptdep
           npm install -g @vscode/vsce
-          vsce package
+          vsce package -o bibimbob-${{ steps.get_version.outputs.VERSION }}.vsix
         
       - name: Upload VSIX as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}
-          path: vscode-rescriptdep/vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}.vsix
+          name: bibimbob-${{ steps.get_version.outputs.VERSION }}
+          path: vscode-rescriptdep/bibimbob-${{ steps.get_version.outputs.VERSION }}.vsix
           retention-days: 7
           
   publish:
@@ -132,19 +132,19 @@ jobs:
       - name: Download VSIX Artifact
         uses: actions/download-artifact@v4
         with:
-          name: vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}
+          name: bibimbob-${{ steps.get_version.outputs.VERSION }}
           path: ./
           
       - name: Publish to VS Code Marketplace
         run: |
           npm install -g @vscode/vsce
-          vsce publish -p ${{ secrets.VSCE_PAT }} --packagePath vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}.vsix
+          vsce publish -p ${{ secrets.VSCE_PAT }} --packagePath bibimbob-${{ steps.get_version.outputs.VERSION }}.vsix
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           
       # - name: Publish to Open VSX Registry
       #   run: |
       #     npm install -g ovsx
-      #     ovsx publish vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}.vsix -p ${{ secrets.OVSX_PAT }}
+      #     ovsx publish bibimbob-${{ steps.get_version.outputs.VERSION }}.vsix -p ${{ secrets.OVSX_PAT }}
       #   env:
       #     OVSX_PAT: ${{ secrets.OVSX_PAT }} 
