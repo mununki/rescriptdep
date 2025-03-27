@@ -413,12 +413,35 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
             height: 15px;
             margin-right: 5px;
             border-radius: 3px;
+            background-color: #f3f4f6;
+            border: 1px solid #9ca3af;
+            position: relative;
+        }
+        .legend-color::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -1px;
+            width: calc(100% + 2px);
+            height: 4px;
+        }
+        .legend-color.center-color::before {
+            background-color: #4CAF50;
+        }
+        .legend-color.dependent-color::before {
+            background-color: #2196F3;
+        }
+        .legend-color.dependency-color::before {
+            background-color: #F44336;
         }
         .node {
             cursor: pointer;
         }
         .node rect {
             border-radius: 6px;
+            fill: #f3f4f6; /* Light gray background */
+            stroke: #9ca3af; /* Darker gray border */
+            stroke-width: 1.5px;
         }
         .node text {
             font-size: 12px;
@@ -433,31 +456,31 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
             stroke-width: 1.5px;
         }
         .center-node rect {
-            fill: #4CAF50;
-            stroke: #2E7D32;
+            stroke-width: 1.5px;
+            stroke: #9ca3af;
         }
         .dependent-node rect {
-            fill: #2196F3;
-            stroke: #1565C0;
+            stroke-width: 1.5px;
+            stroke: #9ca3af;
         }
         .dependency-node rect {
-            fill: #F44336;
-            stroke: #C62828;
+            stroke-width: 1.5px;
+            stroke: #9ca3af;
         }
     </style>
 </head>
 <body>
     <div class="legend">
         <div class="legend-item">
-            <div class="legend-color" style="background-color: #4CAF50;"></div>
+            <div class="legend-color center-color"></div>
             <span>Center Module</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color" style="background-color: #2196F3;"></div>
+            <div class="legend-color dependent-color"></div>
             <span>Dependents (uses center module)</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color" style="background-color: #F44336;"></div>
+            <div class="legend-color dependency-color"></div>
             <span>Dependencies (used by center module)</span>
         </div>
     </div>
@@ -606,6 +629,26 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 .attr('y', d => -d.height / 2)
                 .attr('rx', 6)
                 .attr('ry', 6);
+            
+            // Add top border to nodes based on type
+            node.append('rect')
+                .attr('width', d => d.width)
+                .attr('height', 4)
+                .attr('x', d => -d.width / 2)
+                .attr('y', d => -d.height / 2)
+                .attr('class', 'top-border')
+                .style('fill', d => {
+                    if (d.type === 'center') return '#4CAF50';
+                    if (d.type === 'dependent') return '#2196F3';
+                    if (d.type === 'dependency') return '#F44336';
+                    return '#4CAF50';
+                })
+                .style('stroke', d => {
+                    if (d.type === 'center') return '#4CAF50';
+                    if (d.type === 'dependent') return '#2196F3';
+                    if (d.type === 'dependency') return '#F44336';
+                    return '#4CAF50';
+                });
             
             // Add text labels
             node.append('text')
@@ -764,8 +807,18 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 .attr('y', d => -d.height / 2)
                 .attr('rx', 6)
                 .attr('ry', 6)
-                .style('fill', '#9CCC65')
-                .style('stroke', '#7CB342');
+                .style('fill', '#f3f4f6')
+                .style('stroke', '#9ca3af')
+                .style('stroke-width', '1.5px');
+            
+            // Add top border to nodes
+            node.append('rect')
+                .attr('width', d => d.width)
+                .attr('height', 4)
+                .attr('x', d => -d.width / 2)
+                .attr('y', d => -d.height / 2)
+                .style('fill', '#4CAF50')
+                .style('stroke', '#4CAF50');
             
             // Add text labels
             node.append('text')
