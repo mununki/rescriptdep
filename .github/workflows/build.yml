@@ -73,6 +73,9 @@ jobs:
           else
             echo "VERSION=latest" >> $GITHUB_OUTPUT
           fi
+      - name: Install system dependencies
+        run: |
+          apk add --no-cache linux-headers build-base musl-dev
       - name: Initialize opam
         run: |
           opam init --disable-sandboxing -y
