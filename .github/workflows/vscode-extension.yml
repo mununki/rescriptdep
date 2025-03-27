@@ -8,6 +8,8 @@ on:
 
 jobs:
   build-cli:
+    permissions:
+      actions: read
     uses: ./.github/workflows/build.yml
     with:
       artifacts-for-extension: true
