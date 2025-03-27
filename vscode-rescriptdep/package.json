@@ -4,6 +4,7 @@
   "description": "A tool to analyze dependencies between ReScript modules",
   "version": "0.1.0",
   "publisher": "mununki",
+  "license": "MIT",
   "icon": "images/rescriptdep_icon.png",
   "galleryBanner": {
     "color": "#1E1E1E",
