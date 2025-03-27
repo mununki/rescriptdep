@@ -56,16 +56,11 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
+    container:
+      image: ocaml/opam:alpine-ocaml-5.3
+      options: --user root
     steps:
       - uses: actions/checkout@v4
-      - name: Set up OCaml
-        uses: ocaml/setup-ocaml@v2
-        with:
-          ocaml-compiler: 5.3.0
-          dune-cache: true
-          opam-repositories: |
-            default: https://github.com/ocaml/opam-repository.git
-          opam-depext: false
       - name: Get version
         id: get_version
         run: |
@@ -74,14 +69,14 @@ jobs:
           else
             echo "VERSION=latest" >> $GITHUB_OUTPUT
           fi
-      - name: Install system dependencies
+      - name: Install OCaml dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential
-      - name: Install dependencies
-        run: opam install . --deps-only --with-test
+          eval $(opam env)
+          opam install . --deps-only --with-test -y
       - name: Build project
-        run: opam exec -- dune build
+        run: |
+          eval $(opam env)
+          opam exec -- dune build
       - name: Create executable directory
         run: mkdir -p dist
       - name: Copy executable
