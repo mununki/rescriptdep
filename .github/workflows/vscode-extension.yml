@@ -49,28 +49,21 @@ jobs:
         
       - name: Create temp and bin directories
         run: |
-          mkdir -p temp/darwin temp/linux temp/win32
+          mkdir -p temp/darwin temp/linux
           mkdir -p vscode-rescriptdep/bin/darwin
           mkdir -p vscode-rescriptdep/bin/linux
-          mkdir -p vscode-rescriptdep/bin/win32
         
       - name: Download macOS CLI artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: rescriptdep-darwin-x64-latest
           path: temp/darwin
           
       - name: Download Linux CLI artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: rescriptdep-linux-x64-latest
           path: temp/linux
-          
-      - name: Download Windows CLI artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: rescriptdep-win32-x64-latest
-          path: temp/win32
           
       - name: Extract CLI binaries and move to extension bin folders
         run: |
@@ -81,10 +74,6 @@ jobs:
           # Extract Linux binary
           tar -xzf temp/linux/rescriptdep-linux-x64-latest.tar.gz -C temp/linux
           cp temp/linux/rescriptdep vscode-rescriptdep/bin/linux/
-          
-          # Extract Windows binary
-          unzip -j temp/win32/rescriptdep-win32-x64-latest.zip -d temp/win32
-          cp temp/win32/rescriptdep.exe vscode-rescriptdep/bin/win32/
           
       - name: Set executable permissions
         run: |
@@ -113,7 +102,7 @@ jobs:
           vsce package
         
       - name: Upload VSIX as Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}
           path: vscode-rescriptdep/vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}.vsix
@@ -138,7 +127,7 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           
       - name: Download VSIX Artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}
           path: ./
