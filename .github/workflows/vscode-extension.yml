@@ -27,6 +27,7 @@ jobs:
         with:
           node-version: 20.x
           cache: 'npm'
+          cache-dependency-path: 'vscode-rescriptdep/package-lock.json'
 
       - name: Setup PNPM
         uses: pnpm/action-setup@v2
