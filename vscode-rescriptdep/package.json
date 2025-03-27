@@ -2,7 +2,7 @@
   "name": "vscode-bibimbob",
   "displayName": "Bibimbob",
   "description": "A tool to analyze dependencies between ReScript modules",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "mununki",
   "license": "MIT",
   "icon": "images/rescriptdep_icon.png",
@@ -19,7 +19,7 @@
     "url": "https://github.com/mununki/rescriptdep/issues"
   },
   "engines": {
-    "vscode": "^1.97.0"
+    "vscode": "^1.96.0"
   },
   "categories": [
     "Other"
@@ -70,7 +70,7 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.97.0",
+    "@types/vscode": "^1.96.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
