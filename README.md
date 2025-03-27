@@ -13,6 +13,17 @@ ReScriptDep is a tool for analyzing dependencies between ReScript modules. It us
 opam install rescriptdep
 ```
 
+### Building with Static Linking (Linux)
+
+To build rescriptdep with static linking on Linux, which creates a standalone executable without external dependencies:
+
+```bash
+# Build the project using the static profile
+dune build --profile static
+
+# This will generate a statically linked executable for Linux environments
+```
+
 ## Usage
 
 ```bash
@@ -40,6 +51,9 @@ dune build
 
 # Build a specific executable
 dune build bin/main.exe
+
+# Build with static linking (Linux)
+dune build --profile static
 ```
 
 ### Running Tests
@@ -93,4 +107,4 @@ Tests automatically locate these fixture files, so they should work correctly re
 
 ## License
 
-MIT 
+MIT

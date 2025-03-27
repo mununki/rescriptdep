@@ -87,7 +87,7 @@ jobs:
       - name: Build project
         run: |
           eval $(opam env)
-          opam exec -- dune build
+          opam exec -- dune build --profile static
       - name: Create executable directory
         run: mkdir -p dist
       - name: Copy executable
