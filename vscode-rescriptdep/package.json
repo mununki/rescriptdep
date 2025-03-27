@@ -3,6 +3,11 @@
   "displayName": "ReScript Dependency Visualizer",
   "description": "A tool to analyze dependencies between ReScript modules",
   "version": "0.1.0",
+  "icon": "images/rescriptdep_icon.png",
+  "galleryBanner": {
+    "color": "#1E1E1E",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -30,6 +35,16 @@
       }
     ]
   },
+  "screenshots": [
+    {
+      "path": "images/rescriptdep_screenshot_0.png",
+      "description": "ReScript Dependency Graph Overview"
+    },
+    {
+      "path": "images/rescriptdep_screenshot_1.png",
+      "description": "ReScript Module Dependencies View"
+    }
+  ],
   "scripts": {
     "vscode:prepublish": "pnpm run package",
     "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
