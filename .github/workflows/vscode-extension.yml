@@ -100,6 +100,8 @@ jobs:
         run: |
           cd vscode-rescriptdep
           npm install -g @vscode/vsce
+          # Clean up devDependencies to avoid dependency errors
+          npm prune --production
           vsce package -o bibimbob-${{ steps.get_version.outputs.VERSION }}.vsix
         
       - name: Upload VSIX as Artifact
