@@ -1,4 +1,4 @@
-# ReScript Dependency Visualizer
+# Bibimbob
 
 A Visual Studio Code extension for visualizing dependencies between ReScript modules in your project. This extension helps you understand the structure and relationships in your ReScript codebase.
 
@@ -70,7 +70,7 @@ This extension doesn't require any specific settings.
 
 ### 0.0.1
 
-- Initial release of ReScript Dependency Visualizer
+- Initial release of Bibimbob
 - Dependency graph visualization
 - Module-focused views
 - Caching for improved performance
