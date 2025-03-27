@@ -67,6 +67,10 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
+### 0.1.1
+
+- Fixed compatibility issue by downgrading the VS Code engine requirement to support older VS Code versions
+
 ### 0.1.0
 
 - Initial release of Bibimbob
