@@ -9,6 +9,16 @@ A Visual Studio Code extension for visualizing dependencies between ReScript mod
 - **Interactive Graph**: Click on modules to navigate through dependencies
 - **High Performance**: Uses digest-based caching to improve performance for large projects
 
+## Platform Support
+
+Currently, this extension is supported on:
+- macOS
+- Linux
+
+**Important: Windows is not supported in the current version.**
+
+Windows support is planned for a future release. The limitation is due to issues with the CLI binary build process.
+
 ## Commands
 
 This extension provides several commands in the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`):
@@ -33,6 +43,7 @@ The extension uses a caching mechanism to improve performance when analyzing mod
 
 - A ReScript project (with either `bsconfig.json` or `rescript.json` configuration file)
 - Compiled output in the `lib/bs` directory
+- **Platform**: macOS or Linux (Windows is not supported in the current version)
 
 ## Installation
 
@@ -52,6 +63,7 @@ This extension doesn't require any specific settings.
 
 ## Known Issues
 
+- Windows platform is not supported in the current version
 - Please report any issues on the GitHub repository
 
 ## Release Notes
