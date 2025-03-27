@@ -9,6 +9,11 @@ A Visual Studio Code extension for visualizing dependencies between ReScript mod
 - **Interactive Graph**: Click on modules to navigate through dependencies
 - **High Performance**: Uses digest-based caching to improve performance for large projects
 
+<div style="display: flex; justify-content: space-between;">
+  <img src="images/rescriptdep_screenshot_0.png" alt="ReScript Dependency Visualization" width="49%">
+  <img src="images/rescriptdep_screenshot_1.png" alt="Module Dependency View" width="49%">
+</div>
+
 ## Platform Support
 
 Currently, this extension is supported on:
