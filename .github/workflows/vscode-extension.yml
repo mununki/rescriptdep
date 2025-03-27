@@ -1,0 +1,158 @@
+name: VSCode Extension
+
+on:
+  push:
+    tags:
+      - 'extension-v*'
+  workflow_dispatch:
+
+jobs:
+  build-cli:
+    uses: ./.github/workflows/build.yml
+    with:
+      artifacts-for-extension: true
+  
+  build-extension:
+    needs: build-cli
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: cd vscode-rescriptdep && pnpm install
+        
+      - name: Create temp and bin directories
+        run: |
+          mkdir -p temp/darwin temp/linux temp/win32
+          mkdir -p vscode-rescriptdep/bin/darwin
+          mkdir -p vscode-rescriptdep/bin/linux
+          mkdir -p vscode-rescriptdep/bin/win32
+        
+      - name: Download macOS CLI artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: rescriptdep-darwin-x64-latest
+          path: temp/darwin
+          
+      - name: Download Linux CLI artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: rescriptdep-linux-x64-latest
+          path: temp/linux
+          
+      - name: Download Windows CLI artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: rescriptdep-win32-x64-latest
+          path: temp/win32
+          
+      - name: Extract CLI binaries and move to extension bin folders
+        run: |
+          # Extract macOS binary
+          tar -xzf temp/darwin/rescriptdep-darwin-x64-latest.tar.gz -C temp/darwin
+          cp temp/darwin/rescriptdep vscode-rescriptdep/bin/darwin/
+          
+          # Extract Linux binary
+          tar -xzf temp/linux/rescriptdep-linux-x64-latest.tar.gz -C temp/linux
+          cp temp/linux/rescriptdep vscode-rescriptdep/bin/linux/
+          
+          # Extract Windows binary
+          unzip -j temp/win32/rescriptdep-win32-x64-latest.zip -d temp/win32
+          cp temp/win32/rescriptdep.exe vscode-rescriptdep/bin/win32/
+          
+      - name: Set executable permissions
+        run: |
+          chmod +x vscode-rescriptdep/bin/darwin/rescriptdep
+          chmod +x vscode-rescriptdep/bin/linux/rescriptdep
+
+      - name: Lint
+        run: cd vscode-rescriptdep && pnpm run lint
+      
+      - name: Type Check
+        run: cd vscode-rescriptdep && pnpm run check-types
+        
+      - name: Build
+        run: cd vscode-rescriptdep && pnpm run package
+        
+      - name: Get Extension Version
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./vscode-rescriptdep/package.json').version")
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          
+      - name: Create VSIX Package
+        run: |
+          cd vscode-rescriptdep
+          npm install -g @vscode/vsce
+          vsce package
+        
+      - name: Upload VSIX as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}
+          path: vscode-rescriptdep/vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}.vsix
+          retention-days: 7
+          
+  publish:
+    runs-on: ubuntu-latest
+    needs: build-extension
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          
+      - name: Get Extension Version
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./vscode-rescriptdep/package.json').version")
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          
+      - name: Download VSIX Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}
+          path: ./
+          
+      - name: Publish to VS Code Marketplace
+        run: |
+          npm install -g @vscode/vsce
+          vsce publish -p ${{ secrets.VSCE_PAT }} --packagePath vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          
+      # - name: Publish to Open VSX Registry
+      #   run: |
+      #     npm install -g ovsx
+      #     ovsx publish vscode-rescriptdep-${{ steps.get_version.outputs.VERSION }}.vsix -p ${{ secrets.OVSX_PAT }}
+      #   env:
+      #     OVSX_PAT: ${{ secrets.OVSX_PAT }} 
