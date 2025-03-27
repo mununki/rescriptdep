@@ -1,5 +1,5 @@
 {
-  "name": "vscode-rescriptdep",
+  "name": "vscode-bibimbob",
   "displayName": "Bibimbob",
   "description": "A tool to analyze dependencies between ReScript modules",
   "version": "0.1.0",
