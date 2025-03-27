@@ -48,7 +48,7 @@ jobs:
           cd dist
           tar -czf rescriptdep-darwin-x64-${{ steps.get_version.outputs.VERSION }}.tar.gz rescriptdep
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rescriptdep-darwin-x64-${{ steps.get_version.outputs.VERSION }}
           path: dist/rescriptdep-darwin-x64-${{ steps.get_version.outputs.VERSION }}.tar.gz
@@ -86,7 +86,7 @@ jobs:
           cd dist
           tar -czf rescriptdep-linux-x64-${{ steps.get_version.outputs.VERSION }}.tar.gz rescriptdep
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rescriptdep-linux-x64-${{ steps.get_version.outputs.VERSION }}
           path: dist/rescriptdep-linux-x64-${{ steps.get_version.outputs.VERSION }}.tar.gz
@@ -125,7 +125,7 @@ jobs:
           cd dist
           7z a rescriptdep-win32-x64-${{ steps.get_version.outputs.VERSION }}.zip rescriptdep.exe
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rescriptdep-win32-x64-${{ steps.get_version.outputs.VERSION }}
           path: dist/rescriptdep-win32-x64-${{ steps.get_version.outputs.VERSION }}.zip
