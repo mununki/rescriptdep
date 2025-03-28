@@ -1,0 +1,17 @@
+{
+  "name": "rescript_test_project",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "res:build": "rewatch build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@rolandpeelen/rewatch": "^1.0.11",
+    "rescript": "^11.1.4"
+  }
+}

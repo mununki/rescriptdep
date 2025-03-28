@@ -1,4 +1,5 @@
 _build
 deps.dot
 deps.json
-DS_Store
+.DS_Store
+.rescriptdep_cache.marshal
