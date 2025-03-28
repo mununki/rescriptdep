@@ -216,6 +216,24 @@ let calculate_metrics graph =
       (m, fan_in, fan_out))
     modules
 
+(* Create a filtered graph that excludes standard and internal modules *)
+let create_filtered_graph graph =
+  (* Get all modules from the graph *)
+  let all_modules = get_modules graph in
+
+  (* Filter out standard modules *)
+  let project_modules =
+    List.filter
+      (fun m -> not (Parse_utils.is_stdlib_or_internal_module m))
+      all_modules
+  in
+
+  (* Create the filtered dependencies map *)
+  let filtered_deps = create_subgraph graph project_modules in
+
+  (* Create a new graph with the filtered dependencies and original metadata *)
+  { dependencies = filtered_deps; metadata = graph.metadata }
+
 (* Create a focused graph centered around a specific module *)
 let create_focused_graph graph center_module =
   (* Check if the module exists *)

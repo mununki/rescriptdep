@@ -116,7 +116,7 @@ let main () =
 
     time_checkpoint "Graph building completed";
 
-    (* Apply module focus if specified *)
+    (* Apply module focus if specified or filter standard modules *)
     let focused_graph =
       match !focus_module with
       | Some module_name ->
@@ -129,7 +129,13 @@ let main () =
           in
           time_checkpoint "Module focusing completed";
           result
-      | None -> graph
+      | None ->
+          (* When no focus module is specified, filter out standard modules *)
+          let filtered_graph =
+            Rescriptdep.Dependency_graph.create_filtered_graph graph
+          in
+          time_checkpoint "Standard module filtering completed";
+          filtered_graph
     in
 
     (* Output the graph to the specified output *)
