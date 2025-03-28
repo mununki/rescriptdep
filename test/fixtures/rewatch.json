@@ -1,0 +1,1797 @@
+{
+  "modules": [
+    {
+      "name": "App",
+      "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rewatch/src/app.res",
+      "dependencies": [
+        {
+          "name": "Logger",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rewatch/src/logger.res"
+        },
+        {
+          "name": "Math",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rewatch/src/math.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 2,
+      "in_cycle": false
+    },
+    {
+      "name": "Arg",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Arg.res",
+      "dependencies": [
+        {
+          "name": "Buffer",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Buffer.res"
+        },
+        {
+          "name": "Sys",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Sys.res"
+        },
+        {
+          "name": "Uchar",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Uchar.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 3,
+      "in_cycle": false
+    },
+    {
+      "name": "Array",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Array.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "ArrayLabels",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/ArrayLabels.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "StdLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/StdLabels.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_Array",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_Array.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_Float",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_Float.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_HashMap",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_HashMap.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_HashMapInt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_HashMapInt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_HashMapString",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_HashMapString.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_HashSet",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_HashSet.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_HashSetInt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_HashSetInt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_HashSetString",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_HashSetString.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_Id",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_Id.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_Int",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_Int.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_List",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_List.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_Map",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_Map.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MapDict",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MapDict.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MapInt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MapInt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MapString",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MapString.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MutableMap",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MutableMap.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MutableMapInt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MutableMapInt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MutableMapString",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MutableMapString.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MutableQueue",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MutableQueue.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MutableSet",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MutableSet.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MutableSetInt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MutableSetInt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MutableSetString",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MutableSetString.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_MutableStack",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_MutableStack.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_Option",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_Option.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_Range",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_Range.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_Result",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_Result.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_Set",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_Set.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_SetDict",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_SetDict.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_SetInt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_SetInt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_SetString",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_SetString.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_SortArray",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_SortArray.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_SortArrayInt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_SortArrayInt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_SortArrayString",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_SortArrayString.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_internalAVLset",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_internalAVLset.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_internalAVLtree",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_internalAVLtree.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_internalBuckets",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_internalBuckets.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_internalBucketsType",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_internalBucketsType.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_internalMapInt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_internalMapInt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_internalMapString",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_internalMapString.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_internalSetBuckets",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_internalSetBuckets.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_internalSetInt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_internalSetInt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Belt_internalSetString",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Belt_internalSetString.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Buffer",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Buffer.res",
+      "dependencies": [
+        {
+          "name": "Char",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Char.res"
+        },
+        {
+          "name": "Uchar",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Uchar.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "Filename",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Filename.res"
+        },
+        {
+          "name": "Arg",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Arg.res"
+        }
+      ],
+      "fan_in": 2,
+      "fan_out": 2,
+      "in_cycle": false
+    },
+    {
+      "name": "Bytes",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Bytes.res",
+      "dependencies": [
+        {
+          "name": "Char",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Char.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "BytesLabels",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/BytesLabels.res",
+      "dependencies": [
+        {
+          "name": "Char",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Char.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "StdLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/StdLabels.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "Callback",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Callback.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "CamlinternalLazy",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/CamlinternalLazy.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "CamlinternalMod",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/CamlinternalMod.res",
+      "dependencies": [
+        {
+          "name": "Obj",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Obj.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "Char",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Char.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Uchar",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Uchar.res"
+        },
+        {
+          "name": "Random",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Random.res"
+        },
+        {
+          "name": "Genlex",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Genlex.res"
+        },
+        {
+          "name": "Digest",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Digest.res"
+        },
+        {
+          "name": "BytesLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/BytesLabels.res"
+        },
+        {
+          "name": "Bytes",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Bytes.res"
+        },
+        {
+          "name": "Buffer",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Buffer.res"
+        }
+      ],
+      "fan_in": 7,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Complex",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Complex.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Digest",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Digest.res",
+      "dependencies": [
+        {
+          "name": "Char",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Char.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "Random",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Random.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "Dom",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Dom.res",
+      "dependencies": [
+        {
+          "name": "Dom_storage",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Dom_storage.res"
+        },
+        {
+          "name": "Dom_storage2",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Dom_storage2.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 2,
+      "in_cycle": false
+    },
+    {
+      "name": "Dom_storage",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Dom_storage.res",
+      "dependencies": [
+        {
+          "name": "Dom_storage2",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Dom_storage2.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "Dom",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Dom.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "Dom_storage2",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Dom_storage2.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Dom_storage",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Dom_storage.res"
+        },
+        {
+          "name": "Dom",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Dom.res"
+        }
+      ],
+      "fan_in": 2,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Filename",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Filename.res",
+      "dependencies": [
+        {
+          "name": "Buffer",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Buffer.res"
+        },
+        {
+          "name": "Sys",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Sys.res"
+        },
+        {
+          "name": "Uchar",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Uchar.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 3,
+      "in_cycle": false
+    },
+    {
+      "name": "Genlex",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Genlex.res",
+      "dependencies": [
+        {
+          "name": "Char",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Char.res"
+        },
+        {
+          "name": "Hashtbl",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Hashtbl.res"
+        },
+        {
+          "name": "Stream",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Stream.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 3,
+      "in_cycle": false
+    },
+    {
+      "name": "Hashtbl",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Hashtbl.res",
+      "dependencies": [
+        {
+          "name": "Int32",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Int32.res"
+        },
+        {
+          "name": "Int64",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Int64.res"
+        },
+        {
+          "name": "Lazy",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Lazy.res"
+        },
+        {
+          "name": "Random",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Random.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "MoreLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/MoreLabels.res"
+        },
+        {
+          "name": "HashtblLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/HashtblLabels.res"
+        },
+        {
+          "name": "Genlex",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Genlex.res"
+        }
+      ],
+      "fan_in": 3,
+      "fan_out": 4,
+      "in_cycle": false
+    },
+    {
+      "name": "HashtblLabels",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/HashtblLabels.res",
+      "dependencies": [
+        {
+          "name": "Hashtbl",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Hashtbl.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "MoreLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/MoreLabels.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "Int32",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Int32.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Random",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Random.res"
+        },
+        {
+          "name": "Hashtbl",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Hashtbl.res"
+        }
+      ],
+      "fan_in": 2,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Int64",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Int64.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Random",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Random.res"
+        },
+        {
+          "name": "Hashtbl",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Hashtbl.res"
+        }
+      ],
+      "fan_in": 2,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js.ml",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_OO",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_OO.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_array",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_array.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_array2",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_array2.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_bigint",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_bigint.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_blob",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_blob.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_cast",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_cast.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_console",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_console.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_date",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_date.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_dict",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_dict.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_exn",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_exn.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_file",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_file.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_float",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_float.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_global",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_global.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_int",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_int.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_json",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_json.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_list",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_list.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_map",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_map.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_mapperRt",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_mapperRt.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_math",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_math.ml",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_null",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_null.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_null_undefined",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_null_undefined.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_obj",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_obj.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_option",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_option.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_promise",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_promise.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_promise2",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_promise2.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_re",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_re.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_result",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_result.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_set",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_set.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_string",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_string.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_string2",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_string2.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_typed_array",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_typed_array.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_typed_array2",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_typed_array2.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_types",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_types.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_undefined",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_undefined.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_vector",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_vector.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_weakmap",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_weakmap.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Js_weakset",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Js_weakset.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "JsxC",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxC.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Pervasives",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Pervasives.res"
+        },
+        {
+          "name": "JsxPPXReactSupportC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxPPXReactSupportC.res"
+        },
+        {
+          "name": "JsxDOMC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMC.res"
+        }
+      ],
+      "fan_in": 3,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "JsxDOMC",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMC.res",
+      "dependencies": [
+        {
+          "name": "JsxC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxC.res"
+        },
+        {
+          "name": "JsxDOMStyle",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMStyle.res"
+        },
+        {
+          "name": "JsxEventC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxEventC.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "Pervasives",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Pervasives.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 3,
+      "in_cycle": false
+    },
+    {
+      "name": "JsxDOMStyle",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMStyle.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "JsxDOMU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMU.res"
+        },
+        {
+          "name": "JsxDOMC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMC.res"
+        }
+      ],
+      "fan_in": 2,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "JsxDOMU",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMU.res",
+      "dependencies": [
+        {
+          "name": "JsxDOMStyle",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMStyle.res"
+        },
+        {
+          "name": "JsxEventU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxEventU.res"
+        },
+        {
+          "name": "JsxU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxU.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "PervasivesU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/PervasivesU.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 3,
+      "in_cycle": false
+    },
+    {
+      "name": "JsxEventC",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxEventC.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Pervasives",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Pervasives.res"
+        },
+        {
+          "name": "JsxDOMC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMC.res"
+        }
+      ],
+      "fan_in": 2,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "JsxEventU",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxEventU.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "PervasivesU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/PervasivesU.res"
+        },
+        {
+          "name": "JsxDOMU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMU.res"
+        }
+      ],
+      "fan_in": 2,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "JsxPPXReactSupportC",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxPPXReactSupportC.res",
+      "dependencies": [
+        {
+          "name": "JsxC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxC.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "Pervasives",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Pervasives.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "JsxPPXReactSupportU",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxPPXReactSupportU.res",
+      "dependencies": [
+        {
+          "name": "JsxU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxU.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "PervasivesU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/PervasivesU.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "JsxU",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxU.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "PervasivesU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/PervasivesU.res"
+        },
+        {
+          "name": "JsxPPXReactSupportU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxPPXReactSupportU.res"
+        },
+        {
+          "name": "JsxDOMU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMU.res"
+        }
+      ],
+      "fan_in": 3,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Lazy",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Lazy.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Stream",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Stream.res"
+        },
+        {
+          "name": "Hashtbl",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Hashtbl.res"
+        }
+      ],
+      "fan_in": 2,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Lexing",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Lexing.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Parsing",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Parsing.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "List",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/List.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "ListLabels",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/ListLabels.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "StdLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/StdLabels.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Logger",
+      "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rewatch/src/logger.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "App",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rewatch/src/app.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Map",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Map.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "MoreLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/MoreLabels.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "MapLabels",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/MapLabels.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "MoreLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/MoreLabels.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Math",
+      "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rewatch/src/math.res",
+      "dependencies": [
+        {
+          "name": "Utils",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rewatch/src/utils.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "App",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rewatch/src/app.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "MoreLabels",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/MoreLabels.res",
+      "dependencies": [
+        {
+          "name": "Hashtbl",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Hashtbl.res"
+        },
+        {
+          "name": "HashtblLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/HashtblLabels.res"
+        },
+        {
+          "name": "Map",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Map.res"
+        },
+        {
+          "name": "MapLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/MapLabels.res"
+        },
+        {
+          "name": "Set",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Set.res"
+        },
+        {
+          "name": "SetLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/SetLabels.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 6,
+      "in_cycle": false
+    },
+    {
+      "name": "Obj",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Obj.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Parsing",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Parsing.res"
+        },
+        {
+          "name": "CamlinternalMod",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/CamlinternalMod.res"
+        }
+      ],
+      "fan_in": 2,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Parsing",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Parsing.res",
+      "dependencies": [
+        {
+          "name": "Lexing",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Lexing.res"
+        },
+        {
+          "name": "Obj",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Obj.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 2,
+      "in_cycle": false
+    },
+    {
+      "name": "Pervasives",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Pervasives.res",
+      "dependencies": [
+        {
+          "name": "JsxC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxC.res"
+        },
+        {
+          "name": "JsxDOMC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMC.res"
+        },
+        {
+          "name": "JsxEventC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxEventC.res"
+        },
+        {
+          "name": "JsxPPXReactSupportC",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxPPXReactSupportC.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 4,
+      "in_cycle": false
+    },
+    {
+      "name": "PervasivesU",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/PervasivesU.res",
+      "dependencies": [
+        {
+          "name": "JsxDOMU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxDOMU.res"
+        },
+        {
+          "name": "JsxEventU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxEventU.res"
+        },
+        {
+          "name": "JsxPPXReactSupportU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxPPXReactSupportU.res"
+        },
+        {
+          "name": "JsxU",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/JsxU.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 4,
+      "in_cycle": false
+    },
+    {
+      "name": "Queue",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Queue.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Random",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Random.res",
+      "dependencies": [
+        {
+          "name": "Char",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Char.res"
+        },
+        {
+          "name": "Digest",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Digest.res"
+        },
+        {
+          "name": "Int32",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Int32.res"
+        },
+        {
+          "name": "Int64",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Int64.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "Hashtbl",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Hashtbl.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 4,
+      "in_cycle": false
+    },
+    {
+      "name": "Set",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Set.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "MoreLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/MoreLabels.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "SetLabels",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/SetLabels.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "MoreLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/MoreLabels.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Sort",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Sort.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Stack",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Stack.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "StdLabels",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/StdLabels.res",
+      "dependencies": [
+        {
+          "name": "ArrayLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/ArrayLabels.res"
+        },
+        {
+          "name": "BytesLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/BytesLabels.res"
+        },
+        {
+          "name": "ListLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/ListLabels.res"
+        },
+        {
+          "name": "StringLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/StringLabels.res"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 4,
+      "in_cycle": false
+    },
+    {
+      "name": "Stream",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Stream.res",
+      "dependencies": [
+        {
+          "name": "Lazy",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Lazy.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "Genlex",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Genlex.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "String",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/String.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "StringLabels",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/StringLabels.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "StdLabels",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/StdLabels.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Sys",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Sys.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Filename",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Filename.res"
+        },
+        {
+          "name": "Arg",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Arg.res"
+        }
+      ],
+      "fan_in": 2,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "Uchar",
+      "path": "test/rewatch/node_modules/rescript/lib/ocaml/Uchar.res",
+      "dependencies": [
+        {
+          "name": "Char",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Char.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "Filename",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Filename.res"
+        },
+        {
+          "name": "Buffer",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Buffer.res"
+        },
+        {
+          "name": "Arg",
+          "path": "test/rewatch/node_modules/rescript/lib/ocaml/Arg.res"
+        }
+      ],
+      "fan_in": 3,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "Utils",
+      "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rewatch/src/utils.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "Math",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rewatch/src/math.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    }
+  ],
+  "cycles": [],
+  "metrics": {
+    "total_modules": 138,
+    "average_fan_in": 0.434782608696,
+    "average_fan_out": 0.434782608696,
+    "most_depended_upon": {"module": "Char", "count": 7},
+    "most_dependencies": {"module": "MoreLabels", "count": 6},
+    "cycles_count": 0
+  }
+}
