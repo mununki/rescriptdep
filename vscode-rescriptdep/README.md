@@ -72,6 +72,10 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
+### 0.2.0
+
+- Added external module visualization: Now properly represents external dependencies in the dependency graph
+
 ### 0.1.1
 
 - Fixed compatibility issue by downgrading the VS Code engine requirement to support older VS Code versions
