@@ -27,6 +27,7 @@
   dune
   eio
   eio_main
+  yojson
   (odoc :with-doc))
  (tags
   (topics "dependency analysis" "ReScript" "OCaml")))

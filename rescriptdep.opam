@@ -16,6 +16,7 @@ depends: [
   "dune" {>= "3.16"}
   "eio"
   "eio_main"
+  "yojson"
   "odoc" {with-doc}
 ]
 build: [

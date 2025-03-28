@@ -132,9 +132,15 @@ and output_json graph out_channel =
             let resolved_path =
               match dep_path with
               | Some path_str -> Some path_str
-              | None ->
-                  (* Try to find implementation file for the dependency *)
-                  Parse_utils.find_implementation_file_by_name dep source_dirs
+              | None -> (
+                  match
+                    Parse_utils.find_implementation_file_by_name dep source_dirs
+                  with
+                  | Some path -> Some path
+                  | None ->
+                      (* If not found, try to resolve from node_modules *)
+                      Parse_utils.find_external_module_path dep
+                        (Filename.dirname (List.hd source_dirs)))
             in
 
             (* Add dependency file path if available *)
@@ -162,9 +168,16 @@ and output_json graph out_channel =
             let dependent_path =
               match Dependency_graph.get_module_path graph dependent with
               | Some path -> Some path
-              | None ->
-                  Parse_utils.find_implementation_file_by_name dependent
-                    source_dirs
+              | None -> (
+                  match
+                    Parse_utils.find_implementation_file_by_name dependent
+                      source_dirs
+                  with
+                  | Some path -> Some path
+                  | None ->
+                      (* If not found, try to resolve from node_modules *)
+                      Parse_utils.find_external_module_path dependent
+                        (Filename.dirname (List.hd source_dirs)))
             in
 
             output_string out_channel "        {\n";

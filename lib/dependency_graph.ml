@@ -123,33 +123,12 @@ let transitive_dependencies graph module_name =
   visit module_name;
   List.rev !result
 
-(* Create a subgraph containing only specified modules *)
-let create_subgraph graph modules =
+(* Create a subgraph containing only specified modules but preserving all their dependencies *)
+let create_subgraph_preserve_deps graph modules =
   let module StringSet = Set.Make (String) in
   let module_set = StringSet.of_list modules in
 
   StringMap.filter (fun m _ -> StringSet.mem m module_set) graph.dependencies
-  |> StringMap.map (fun deps ->
-         List.filter (fun dep -> StringSet.mem dep module_set) deps)
-
-(* Trim the graph to only include modules reachable from the specified roots *)
-let trim_to_reachable graph roots =
-  let reachable = Hashtbl.create (StringMap.cardinal graph.dependencies) in
-
-  let rec mark_reachable m =
-    if not (Hashtbl.mem reachable m) then (
-      Hashtbl.add reachable m true;
-      try
-        let deps = StringMap.find m graph.dependencies in
-        List.iter mark_reachable deps
-      with Not_found -> ())
-  in
-
-  List.iter mark_reachable roots;
-
-  let reachable_modules = Hashtbl.fold (fun m _ acc -> m :: acc) reachable [] in
-
-  create_subgraph graph reachable_modules
 
 (* Find the strongly connected components (groups of modules with cycles) *)
 let find_strongly_connected_components graph =
@@ -221,15 +200,15 @@ let create_filtered_graph graph =
   (* Get all modules from the graph *)
   let all_modules = get_modules graph in
 
-  (* Filter out standard modules *)
+  (* Filter out standard modules from the graph nodes *)
   let project_modules =
     List.filter
       (fun m -> not (Parse_utils.is_stdlib_or_internal_module m))
       all_modules
   in
 
-  (* Create the filtered dependencies map *)
-  let filtered_deps = create_subgraph graph project_modules in
+  (* Filter graph nodes (keep only project modules), but preserve all their dependencies *)
+  let filtered_deps = create_subgraph_preserve_deps graph project_modules in
 
   (* Create a new graph with the filtered dependencies and original metadata *)
   { dependencies = filtered_deps; metadata = graph.metadata }

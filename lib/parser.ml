@@ -670,14 +670,7 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
 
       let module_info = parse_cmt_file ~verbose ~skip_cache file in
 
-      (* Filter dependencies to only include project modules *)
-      let filtered_deps =
-        List.filter
-          (fun dep -> List.mem dep project_modules)
-          module_info.dependencies
-      in
-
-      Some { module_info with dependencies = filtered_deps }
+      Some module_info
     with Invalid_cmt_file msg ->
       if verbose then Printf.printf "Invalid cmt file: %s - %s\n" file msg;
       None
