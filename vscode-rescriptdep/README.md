@@ -72,6 +72,10 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
+### 0.3.0
+
+- Added dark theme support: The dependency graph visualization now automatically adapts to your VS Code theme
+
 ### 0.2.0
 
 - Added external module visualization: Now properly represents external dependencies in the dependency graph
