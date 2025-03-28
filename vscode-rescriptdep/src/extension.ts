@@ -378,7 +378,37 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
     }
   }
 
-  // Create HTML content without problematic CSS properties
+  // Detect if the current theme is dark
+  const isDarkTheme = vscode.window.activeColorTheme && vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
+
+  // Define color sets based on theme
+  const colors = {
+    // Light theme colors
+    light: {
+      nodeBg: '#f3f4f6',
+      nodeBorder: '#9ca3af',
+      linkStroke: '#999',
+      textColor: '#333333',
+      centerColor: '#4CAF50',
+      dependentColor: '#2196F3',
+      dependencyColor: '#F44336',
+    },
+    // Dark theme colors
+    dark: {
+      nodeBg: '#2d2d2d',
+      nodeBorder: '#555555',
+      linkStroke: '#aaaaaa',
+      textColor: '#e0e0e0',
+      centerColor: '#5CCC60', // Brighter green for dark mode
+      dependentColor: '#42A5F5', // Brighter blue for dark mode
+      dependencyColor: '#FF5252', // Brighter red for dark mode
+    }
+  };
+
+  // Select appropriate color set
+  const theme = isDarkTheme ? colors.dark : colors.light;
+
+  // Create HTML content with theme-appropriate colors
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -414,8 +444,8 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
             height: 15px;
             margin-right: 5px;
             border-radius: 3px;
-            background-color: #f3f4f6;
-            border: 1px solid #9ca3af;
+            background-color: ${theme.nodeBg};
+            border: 1px solid ${theme.nodeBorder};
             position: relative;
         }
         .legend-color::before {
@@ -427,46 +457,46 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
             height: 4px;
         }
         .legend-color.center-color::before {
-            background-color: #4CAF50;
+            background-color: ${theme.centerColor};
         }
         .legend-color.dependent-color::before {
-            background-color: #2196F3;
+            background-color: ${theme.dependentColor};
         }
         .legend-color.dependency-color::before {
-            background-color: #F44336;
+            background-color: ${theme.dependencyColor};
         }
         .node {
             cursor: pointer;
         }
         .node rect {
             border-radius: 6px;
-            fill: #f3f4f6; /* Light gray background */
-            stroke: #9ca3af; /* Darker gray border */
+            fill: ${theme.nodeBg};
+            stroke: ${theme.nodeBorder};
             stroke-width: 1.5px;
         }
         .node text {
             font-size: 12px;
-            fill: var(--vscode-editor-foreground);
+            fill: ${theme.textColor};
             text-anchor: middle;
             dominant-baseline: middle;
         }
         .link {
             fill: none;
-            stroke: #999;
+            stroke: ${theme.linkStroke};
             stroke-opacity: 0.6;
             stroke-width: 1.5px;
         }
         .center-node rect {
             stroke-width: 1.5px;
-            stroke: #9ca3af;
+            stroke: ${theme.nodeBorder};
         }
         .dependent-node rect {
             stroke-width: 1.5px;
-            stroke: #9ca3af;
+            stroke: ${theme.nodeBorder};
         }
         .dependency-node rect {
             stroke-width: 1.5px;
-            stroke: #9ca3af;
+            stroke: ${theme.nodeBorder};
         }
     </style>
 </head>
@@ -495,6 +525,10 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
         const data = ${JSON.stringify(data)};
         const isFocusedMode = ${isFocusedMode};
         const centerModule = ${JSON.stringify(centerModule)};
+        const isDarkTheme = ${isDarkTheme};
+        
+        // Theme colors
+        const theme = ${JSON.stringify(theme)};
         
         // Create and render the dependency graph
         function createGraph() {
@@ -586,7 +620,7 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 .attr('orient', 'auto')
                 .append('path')
                 .attr('d', 'M0,-5L10,0L0,5')
-                .attr('fill', '#999');
+                .attr('fill', theme.linkStroke);
             
             // Create the force simulation
             const simulation = d3.forceSimulation(nodes)
@@ -639,16 +673,16 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 .attr('y', d => -d.height / 2)
                 .attr('class', 'top-border')
                 .style('fill', d => {
-                    if (d.type === 'center') return '#4CAF50';
-                    if (d.type === 'dependent') return '#2196F3';
-                    if (d.type === 'dependency') return '#F44336';
-                    return '#4CAF50';
+                    if (d.type === 'center') return theme.centerColor;
+                    if (d.type === 'dependent') return theme.dependentColor;
+                    if (d.type === 'dependency') return theme.dependencyColor;
+                    return theme.centerColor;
                 })
                 .style('stroke', d => {
-                    if (d.type === 'center') return '#4CAF50';
-                    if (d.type === 'dependent') return '#2196F3';
-                    if (d.type === 'dependency') return '#F44336';
-                    return '#4CAF50';
+                    if (d.type === 'center') return theme.centerColor;
+                    if (d.type === 'dependent') return theme.dependentColor;
+                    if (d.type === 'dependency') return theme.dependencyColor;
+                    return theme.centerColor;
                 });
             
             // Add text labels
@@ -771,7 +805,7 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 .attr('orient', 'auto')
                 .append('path')
                 .attr('d', 'M0,-5L10,0L0,5')
-                .attr('fill', '#999');
+                .attr('fill', theme.linkStroke);
             
             // Create the force simulation
             const simulation = d3.forceSimulation(nodes)
@@ -808,8 +842,8 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 .attr('y', d => -d.height / 2)
                 .attr('rx', 6)
                 .attr('ry', 6)
-                .style('fill', '#f3f4f6')
-                .style('stroke', '#9ca3af')
+                .style('fill', theme.nodeBg)
+                .style('stroke', theme.nodeBorder)
                 .style('stroke-width', '1.5px');
             
             // Add top border to nodes
@@ -818,8 +852,8 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 .attr('height', 4)
                 .attr('x', d => -d.width / 2)
                 .attr('y', d => -d.height / 2)
-                .style('fill', '#4CAF50')
-                .style('stroke', '#4CAF50');
+                .style('fill', theme.centerColor)
+                .style('stroke', theme.centerColor);
             
             // Add text labels
             node.append('text')
@@ -891,6 +925,16 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                     data.cycles = updatedData.cycles;
                     data.metrics = updatedData.metrics;
                     
+                    // Update theme if provided
+                    if (message.isDarkTheme !== undefined) {
+                        // Update the theme if it changed
+                        const newIsDarkTheme = message.isDarkTheme;
+                        if (newIsDarkTheme !== isDarkTheme) {
+                            window.location.reload(); // Reload to apply new theme
+                            return;
+                        }
+                    }
+                    
                     // Update center module if in focused mode
                     if (isFocusedMode && message.focusedModule) {
                       const foundModule = updatedData.modules.find(m => m.name === message.focusedModule);
@@ -926,6 +970,22 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
   );
 
   panel.webview.html = htmlContent;
+
+  // Listen for theme changes
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveColorTheme(theme => {
+      const newIsDarkTheme = theme.kind === vscode.ColorThemeKind.Dark;
+      if (newIsDarkTheme !== isDarkTheme) {
+        console.log(`Theme changed to ${newIsDarkTheme ? 'dark' : 'light'}`);
+        // Rerender the webview with the new theme
+        panel.webview.postMessage({
+          command: 'updateGraph',
+          jsonContent: jsonContent,
+          isDarkTheme: newIsDarkTheme
+        });
+      }
+    })
+  );
 
   // Handle messages from webview
   panel.webview.onDidReceiveMessage(
@@ -1005,12 +1065,17 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
               ], context);
 
               if (jsonContent) {
+                // Get current theme status when updating
+                const currentIsDarkTheme = vscode.window.activeColorTheme &&
+                  vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
+
                 // Send the new json content back to the webview for update
                 console.log(`Sending updated data for module: ${moduleName}`);
                 panel.webview.postMessage({
                   command: 'updateGraph',
                   jsonContent: jsonContent,
-                  focusedModule: moduleName
+                  focusedModule: moduleName,
+                  isDarkTheme: currentIsDarkTheme
                 });
               } else {
                 vscode.window.showErrorMessage(`Failed to generate dependency data for ${moduleName}`);
