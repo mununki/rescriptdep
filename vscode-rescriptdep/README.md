@@ -10,8 +10,8 @@ A Visual Studio Code extension for visualizing dependencies between ReScript mod
 - **High Performance**: Uses digest-based caching to improve performance for large projects
 
 <div style="display: flex; justify-content: space-between;">
-  <img src="images/rescriptdep_screenshot_0.png" alt="ReScript Dependency Visualization" width="49%">
-  <img src="images/rescriptdep_screenshot_1.png" alt="Module Dependency View" width="49%">
+  <img src="https://github.com/mununki/rescriptdep/raw/main/vscode-rescriptdep/images/rescriptdep_screenshot_0.png" alt="ReScript Dependency Visualization" width="49%">
+  <img src="https://github.com/mununki/rescriptdep/raw/main/vscode-rescriptdep/images/rescriptdep_screenshot_1.png" alt="Module Dependency View" width="49%">
 </div>
 
 ## Platform Support
@@ -92,6 +92,6 @@ This extension doesn't require any specific settings.
 ## For more information
 
 * [ReScript Language](https://rescript-lang.org/)
-* [GitHub Repository](https://github.com/yourname/vscode-rescriptdep)
+* [GitHub Repository](https://github.com/mununki/rescriptdep)
 
 **Enjoy!**
