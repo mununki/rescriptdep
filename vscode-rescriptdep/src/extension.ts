@@ -9,6 +9,9 @@ const SHOW_DEPENDENCY_GRAPH = 'bibimbob.showDependencyGraph';
 const FOCUS_MODULE_DEPENDENCIES = 'bibimbob.focusModuleDependencies';
 const CLEAR_CACHE = 'bibimbob.clearCache';
 
+// Track the current webview panel
+let currentPanel: vscode.WebviewPanel | undefined = undefined;
+
 export function activate(context: vscode.ExtensionContext) {
   console.log('Bibimbob is activated');
   // Command for full dependency graph
@@ -927,12 +930,8 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                     
                     // Update theme if provided
                     if (message.isDarkTheme !== undefined) {
-                        // Update the theme if it changed
-                        const newIsDarkTheme = message.isDarkTheme;
-                        if (newIsDarkTheme !== isDarkTheme) {
-                            window.location.reload(); // Reload to apply new theme
-                            return;
-                        }
+                        // No need to reload, we'll handle theme updates externally
+                        // by recreating the webview with the right theme colors
                     }
                     
                     // Update center module if in focused mode
@@ -956,39 +955,48 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
 </body>
 </html>`;
 
-  // Create and display webview panel
-  const panel = vscode.window.createWebviewPanel(
-    'bibimbobVisualizer',
-    isFocusedMode && centerModule ? `Module: ${centerModule.name} Dependencies` : 'ReScript Dependencies',
-    vscode.ViewColumn.One,
-    {
-      enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.file(path.join(context.extensionPath, 'media'))
-      ]
-    }
-  );
+  // Check if we already have a panel
+  if (currentPanel) {
+    // If we already have a panel, just update its html
+    currentPanel.webview.html = htmlContent;
+    currentPanel.title = isFocusedMode && centerModule ? `Module: ${centerModule.name} Dependencies` : 'ReScript Dependencies';
+    currentPanel.reveal(vscode.ViewColumn.One);
+  } else {
+    // Create a new panel
+    currentPanel = vscode.window.createWebviewPanel(
+      'bibimbobVisualizer',
+      isFocusedMode && centerModule ? `Module: ${centerModule.name} Dependencies` : 'ReScript Dependencies',
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        localResourceRoots: [
+          vscode.Uri.file(path.join(context.extensionPath, 'media'))
+        ]
+      }
+    );
 
-  panel.webview.html = htmlContent;
+    currentPanel.webview.html = htmlContent;
+
+    // Handle panel disposal
+    currentPanel.onDidDispose(() => {
+      currentPanel = undefined;
+    }, null, context.subscriptions);
+  }
 
   // Listen for theme changes
   context.subscriptions.push(
     vscode.window.onDidChangeActiveColorTheme(theme => {
       const newIsDarkTheme = theme.kind === vscode.ColorThemeKind.Dark;
-      if (newIsDarkTheme !== isDarkTheme) {
+      if (newIsDarkTheme !== isDarkTheme && currentPanel) {
         console.log(`Theme changed to ${newIsDarkTheme ? 'dark' : 'light'}`);
-        // Rerender the webview with the new theme
-        panel.webview.postMessage({
-          command: 'updateGraph',
-          jsonContent: jsonContent,
-          isDarkTheme: newIsDarkTheme
-        });
+        // Recreate the webview with the new theme
+        showGraphWebview(context, jsonContent, isFocusedMode, centerModuleName);
       }
     })
   );
 
   // Handle messages from webview
-  panel.webview.onDidReceiveMessage(
+  currentPanel.webview.onDidReceiveMessage(
     async message => {
       switch (message.command) {
         case 'openFile':
@@ -1071,12 +1079,14 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
 
                 // Send the new json content back to the webview for update
                 console.log(`Sending updated data for module: ${moduleName}`);
-                panel.webview.postMessage({
-                  command: 'updateGraph',
-                  jsonContent: jsonContent,
-                  focusedModule: moduleName,
-                  isDarkTheme: currentIsDarkTheme
-                });
+                if (currentPanel) {
+                  currentPanel.webview.postMessage({
+                    command: 'updateGraph',
+                    jsonContent: jsonContent,
+                    focusedModule: moduleName,
+                    isDarkTheme: currentIsDarkTheme
+                  });
+                }
               } else {
                 vscode.window.showErrorMessage(`Failed to generate dependency data for ${moduleName}`);
               }
