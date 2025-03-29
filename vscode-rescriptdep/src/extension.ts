@@ -518,12 +518,12 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
 <body>
     <div class="legend">
         <div class="legend-item">
-            <div class="legend-color center-color"></div>
-            <span>Center Module</span>
-        </div>
-        <div class="legend-item">
             <div class="legend-color dependent-color"></div>
             <span>Dependents (uses center module)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color center-color"></div>
+            <span>Center Module</span>
         </div>
         <div class="legend-item">
             <div class="legend-color dependency-color"></div>
