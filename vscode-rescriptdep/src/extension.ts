@@ -13,7 +13,7 @@ const CLEAR_CACHE = 'bibimbob.clearCache';
 let currentPanel: vscode.WebviewPanel | undefined = undefined;
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Bibimbob is activated');
+  // console.log('Bibimbob is activated'); // Removed log
   // Command for full dependency graph
   let fullGraphCommand = vscode.commands.registerCommand(SHOW_DEPENDENCY_GRAPH, async () => {
     await generateDependencyGraph(context);
@@ -93,6 +93,71 @@ function getCurrentModuleNameFromActiveEditor(): string | undefined {
   return undefined;
 }
 
+// Restore findConfigFile function definition at the top level
+async function findConfigFile(workspaceRoot: string): Promise<vscode.Uri | undefined> {
+  // Prioritize bsconfig.json, then rescript.json
+  const bsconfigFiles = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(workspaceRoot, '**/bsconfig.json'),
+    '**/node_modules/**', // exclude node_modules
+    1 // find only the first one
+  );
+  if (bsconfigFiles.length > 0) {
+    return bsconfigFiles[0];
+  }
+
+  const rescriptFiles = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(workspaceRoot, '**/rescript.json'),
+    '**/node_modules/**', // exclude node_modules
+    1 // find only the first one
+  );
+  if (rescriptFiles.length > 0) {
+    return rescriptFiles[0];
+  }
+
+  return undefined; // Should not happen if activationEvents worked
+}
+
+// Helper function to find the nearest project root (containing bsconfig/rescript.json)
+// starting from a given file path and going upwards.
+async function findProjectRootForFile(filePath: string, workspaceRoot: string): Promise<string | undefined> {
+  let currentDir = path.dirname(filePath);
+
+  // Iterate upwards until we find a config file or hit the workspace root
+  while (currentDir.startsWith(workspaceRoot) && currentDir !== workspaceRoot) {
+    const bsconfigPath = path.join(currentDir, 'bsconfig.json');
+    const rescriptPath = path.join(currentDir, 'rescript.json');
+
+    try {
+      // Check if either config file exists in the current directory
+      if (fs.existsSync(bsconfigPath) || fs.existsSync(rescriptPath)) {
+        return currentDir; // Found the project root
+      }
+    } catch (err) {
+      // Ignore errors (e.g., permission issues) and continue upwards
+      console.warn(`Error checking for config files in ${currentDir}:`, err);
+    }
+
+    // Move one directory up
+    const parentDir = path.dirname(currentDir);
+    // Avoid infinite loop if dirname doesn't change (e.g., at root)
+    if (parentDir === currentDir) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+
+  // If not found in subdirectories, check the workspace root itself
+  const bsconfigPath = path.join(workspaceRoot, 'bsconfig.json');
+  const rescriptPath = path.join(workspaceRoot, 'rescript.json');
+  if (fs.existsSync(bsconfigPath) || fs.existsSync(rescriptPath)) {
+    return workspaceRoot;
+  }
+
+
+  // Return undefined if no config file found up to the workspace root
+  return undefined;
+}
+
 // Integrated common logic into a single function
 async function generateDependencyGraph(context: vscode.ExtensionContext, focusOnModule: boolean = false) {
   // Use withProgress API to show a progress notification in the bottom right
@@ -102,72 +167,107 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
     cancellable: true
   }, async (progress, token) => {
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
+    if (!workspaceFolders || workspaceFolders.length === 0) { // Ensure folder exists
       vscode.window.showErrorMessage('No workspace folder open');
       return;
     }
 
+    // Use the first workspace folder as the root for searching
     const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
-    // Check if it's a ReScript project
-    const hasBsconfig = fs.existsSync(path.join(workspaceRoot, 'bsconfig.json'));
-    const hasRescriptConfig = fs.existsSync(path.join(workspaceRoot, 'rescript.json'));
+    // Find the initial config file (used for full graph or as fallback)
+    progress.report({ message: 'Finding ReScript config file...' });
+    const initialConfigFileUri = await findConfigFile(workspaceRoot);
 
-    if (!hasBsconfig && !hasRescriptConfig) {
-      vscode.window.showErrorMessage('Not a ReScript project (neither bsconfig.json nor rescript.json found)');
+    if (token.isCancellationRequested) return;
+
+    // If no config file is found anywhere, exit (should be caught by activationEvents)
+    if (!initialConfigFileUri) {
+      vscode.window.showErrorMessage('Could not find any bsconfig.json or rescript.json in the workspace (excluding node_modules).');
       return;
     }
 
+    let projectRoot: string;
+    let bsDir: string;
+
     try {
-      progress.report({ message: 'Finding CLI path...' });
-      if (token.isCancellationRequested) return;
-
-      // Find CLI path
-      const cliPath = await findRescriptDepCLI(context);
-
-      // bs directory path
-      const bsDir = path.join(workspaceRoot, 'lib', 'bs');
-
       let moduleName: string | undefined;
 
-      // Request module name if in focused mode
+      // --- Logic when focusing on a specific module ---
       if (focusOnModule) {
         progress.report({ message: 'Getting module information...' });
         if (token.isCancellationRequested) return;
 
-        // First try to get module name from active editor
+        // Get module name (from editor or input)
         moduleName = getCurrentModuleNameFromActiveEditor();
-
-        // If no active ReScript file is open or couldn't determine module name,
-        // fall back to asking the user
         if (!moduleName) {
           moduleName = await vscode.window.showInputBox({
             prompt: 'Enter module name to focus on',
             placeHolder: 'ModuleName'
           });
         }
+        if (!moduleName) return; // User cancelled
 
-        if (!moduleName) return; // User cancelled or no module name available
+        // Find the source file for the target module
+        progress.report({ message: `Finding source file for ${moduleName}...` });
+        const moduleInfo = await findModuleInProject(moduleName);
+        if (!moduleInfo) {
+          vscode.window.showErrorMessage(`Could not find the source file for module: ${moduleName}`);
+          return;
+        }
+
+        // Find the project root specific to this module's source file
+        progress.report({ message: `Finding project root for ${moduleName}...` });
+        const moduleProjectRoot = await findProjectRootForFile(moduleInfo.path, workspaceRoot);
+        if (!moduleProjectRoot) {
+          vscode.window.showErrorMessage(`Could not determine the project root for module: ${moduleName} (no bsconfig/rescript.json found in parent directories).`);
+          return;
+        }
+
+        // Calculate bsDir based on the module's specific project root
+        projectRoot = moduleProjectRoot;
+        bsDir = path.join(projectRoot, 'lib', 'bs');
+
+      } else {
+        // --- Logic for full dependency graph ---
+        // Use the initially found config file's location
+        projectRoot = path.dirname(initialConfigFileUri.fsPath);
+        bsDir = path.join(projectRoot, 'lib', 'bs');
       }
 
+      // Check if the determined bsDir exists (common check)
+      if (!fs.existsSync(bsDir)) {
+        vscode.window.showWarningMessage(`ReScript build directory not found: ${bsDir}. Please ensure the project is compiled.`);
+        // Consider returning if bsDir is essential for the CLI command
+      }
+
+      // Find CLI path
+      progress.report({ message: 'Finding CLI path...' });
+      if (token.isCancellationRequested) return;
+      const cliPath = await findRescriptDepCLI(context);
+
+      // Run the CLI command with the determined bsDir and moduleName (if applicable)
+      progress.report({ message: 'Running rescriptdep CLI...' });
       if (token.isCancellationRequested) return;
 
-      // Get data in JSON format
-      const jsonContent = await runRescriptDep(cliPath, [
+      const cliArgs = [
         '--format=json',
         ...(moduleName ? ['--module', moduleName] : []),
-        bsDir
-      ], context);
+        bsDir // Use the bsDir calculated based on focus mode
+      ];
 
-      // Display webview with the json data
+      const jsonContent = await runRescriptDep(cliPath, cliArgs, context);
+
+      // Display webview
       progress.report({ message: 'Generating visualization...' });
       if (token.isCancellationRequested) return;
 
       if (jsonContent) {
         showGraphWebview(context, jsonContent, focusOnModule, moduleName);
       } else {
-        vscode.window.showErrorMessage('Failed to generate dependency visualization');
+        vscode.window.showErrorMessage('Failed to generate dependency visualization (CLI returned no content).');
       }
+
     } catch (error) {
       if (!token.isCancellationRequested) {
         vscode.window.showErrorMessage(`Error generating dependency visualization: ${error}`);
@@ -258,69 +358,23 @@ function getBundledCLIPath(extensionPath: string): string {
 
 // Run CLI with arguments
 async function runRescriptDep(cliPath: string, args: string[], context?: vscode.ExtensionContext): Promise<string> {
-  // Setup cache directory
-  let cacheArgs: string[] = [];
-
-  if (context) {
-    try {
-      // Create cache directory if it doesn't exist using globalStorageUri
-      const cacheDir = vscode.Uri.joinPath(context.globalStorageUri, 'cache');
-      const cacheDirPath = cacheDir.fsPath;
-      const storageDir = context.globalStorageUri.fsPath;
-
-      if (!fs.existsSync(storageDir)) {
-        fs.mkdirSync(storageDir, { recursive: true });
-      }
-
-      if (!fs.existsSync(cacheDirPath)) {
-        fs.mkdirSync(cacheDirPath, { recursive: true });
-      }
-
-      // Get workspace name to create a unique cache file per project
-      const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
-      const cacheFilePath = path.join(cacheDirPath, `${workspaceName}.rescriptdep_cache.marshal`);
-
-      // Add cache file argument
-      cacheArgs = ['--cache-file', cacheFilePath];
-    } catch (error) {
-      console.error('Error setting up cache directory:', error);
-      // Continue without cache if there's an error
-    }
-  }
-
-  // Merge the cache arguments with the provided arguments
-  const fullArgs = [...cacheArgs, ...args];
-
+  // Restore the correct Promise-based implementation using cp.execFile
   return new Promise((resolve, reject) => {
-    if (cliPath.includes('_build/default/bin') && cliPath.endsWith('main.exe')) {
-      // Direct execution of built binary
-      cp.execFile(cliPath, fullArgs, (error, stdout) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(stdout.toString());
-      });
-      return;
-    }
+    const command = cliPath;
+    const options: cp.ExecFileOptions = {}; // Add options like cwd if needed later
 
-    if (cliPath === 'rescriptdep') {
-      cp.exec(`rescriptdep ${fullArgs.join(' ')}`, (error, stdout) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(stdout.toString());
-      });
-    } else {
-      cp.execFile(cliPath, fullArgs, (error, stdout) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(stdout.toString());
-      });
-    }
+    cp.execFile(command, args, options, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`rescriptdep stderr: ${stderr}`);
+        // Include stderr in the rejection for better debugging
+        reject(new Error(`Command failed: ${command} ${args.join(' ')}\n${error.message}\nStderr: ${stderr}`));
+        return;
+      }
+      if (stderr) {
+        console.warn(`rescriptdep stderr: ${stderr}`);
+      }
+      resolve(stdout.toString());
+    });
   });
 }
 
@@ -1043,115 +1097,157 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
     })
   );
 
-  // Handle messages from webview
-  currentPanel.webview.onDidReceiveMessage(
-    async message => {
-      switch (message.command) {
-        case 'openFile':
-          try {
-            let filePath = message.path;
-            let lineNumber = message.line || 1;
+  // Restore the message handler for webview communication
+  if (currentPanel) { // Ensure panel exists before adding listener
+    currentPanel.webview.onDidReceiveMessage(
+      async message => {
+        switch (message.command) {
+          case 'openFile':
+            try {
+              let filePath = message.path;
+              let lineNumber = message.line || 1;
 
-            // Try to find the file in the project if path is not provided
-            if (!filePath) {
-              const moduleInfo = await findModuleInProject(message.moduleName);
-              if (moduleInfo) {
-                filePath = moduleInfo.path;
-                lineNumber = moduleInfo.line;
-              } else {
-                vscode.window.showWarningMessage(`File not found: ${message.moduleName}`);
-                return;
+              // Try to find the file in the project if path is not provided
+              if (!filePath) {
+                const moduleInfo = await findModuleInProject(message.moduleName);
+                if (moduleInfo) {
+                  filePath = moduleInfo.path;
+                  lineNumber = moduleInfo.line;
+                } else {
+                  vscode.window.showWarningMessage(`File not found: ${message.moduleName}`);
+                  return;
+                }
               }
+
+              // Create URI and open file
+              const fileUri = vscode.Uri.file(filePath);
+              const document = await vscode.workspace.openTextDocument(fileUri);
+              await vscode.window.showTextDocument(document);
+
+              // Move to specified line
+              const editor = vscode.window.activeTextEditor;
+              if (editor) {
+                const position = new vscode.Position(lineNumber - 1, 0);
+                editor.selection = new vscode.Selection(position, position);
+                editor.revealRange(
+                  new vscode.Range(position, position),
+                  vscode.TextEditorRevealType.InCenter
+                );
+              }
+            } catch (error) {
+              vscode.window.showErrorMessage(`Failed to open file: ${error}`);
             }
+            break;
 
-            // Create URI and open file
-            const fileUri = vscode.Uri.file(filePath);
-            const document = await vscode.workspace.openTextDocument(fileUri);
-            await vscode.window.showTextDocument(document);
-
-            // Move to specified line
-            const editor = vscode.window.activeTextEditor;
-            if (editor) {
-              const position = new vscode.Position(lineNumber - 1, 0);
-              editor.selection = new vscode.Selection(position, position);
-              editor.revealRange(
-                new vscode.Range(position, position),
-                vscode.TextEditorRevealType.InCenter
-              );
-            }
-          } catch (error) {
-            vscode.window.showErrorMessage(`Failed to open file: ${error}`);
-          }
-          break;
-
-        case 'focusModule':
-          try {
-            const moduleName = message.moduleName;
-            if (!moduleName) {
-              vscode.window.showErrorMessage('No module name provided');
-              return;
-            }
-
-            console.log(`Received focusModule request for: ${moduleName}`);
-
-            // Run a new dependency analysis focused on this module
-            await vscode.window.withProgress({
-              location: vscode.ProgressLocation.Notification,
-              title: `ReScript: Analyzing dependencies for ${moduleName}...`,
-              cancellable: true
-            }, async (progress, token) => {
-              const workspaceFolders = vscode.workspace.workspaceFolders;
-              if (!workspaceFolders) {
-                vscode.window.showErrorMessage('No workspace folder open');
+          case 'focusModule':
+            try {
+              const moduleName = message.moduleName;
+              if (!moduleName) {
+                vscode.window.showErrorMessage('No module name provided');
                 return;
               }
 
-              const workspaceRoot = workspaceFolders[0].uri.fsPath;
-              const bsDir = path.join(workspaceRoot, 'lib', 'bs');
+              // Run a new dependency analysis focused on this module
+              await vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: `ReScript: Analyzing dependencies for ${moduleName}...`,
+                cancellable: true
+              }, async (progress, token) => {
 
-              // Find CLI path
-              const cliPath = await findRescriptDepCLI(context);
+                // Re-calculate project root and bsDir for this focus request
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (!workspaceFolders || workspaceFolders.length === 0) {
+                  vscode.window.showErrorMessage('No workspace folder open');
+                  return;
+                }
+                const workspaceRoot = workspaceFolders[0].uri.fsPath;
+                const configFileUri = await findConfigFile(workspaceRoot);
+                if (!configFileUri) {
+                  vscode.window.showErrorMessage('Could not find config file when focusing module.');
+                  return;
+                }
+                const projectRoot = path.dirname(configFileUri.fsPath);
+                const bsDir = path.join(projectRoot, 'lib', 'bs');
 
-              // Get JSON format data
-              const jsonContent = await runRescriptDep(cliPath, [
-                '--format=json',
-                '--module',
-                moduleName,
-                bsDir
-              ], context);
+                if (!fs.existsSync(bsDir)) {
+                  vscode.window.showWarningMessage(`Build directory not found: ${bsDir}`);
+                  // Optionally return if bsDir is critical
+                }
 
-              if (jsonContent) {
-                // Get current theme status when updating
-                const currentIsDarkTheme = vscode.window.activeColorTheme &&
-                  vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
+                // Find CLI path
+                const cliPath = await findRescriptDepCLI(context);
 
-                // Send the new json content back to the webview for update
-                console.log(`Sending updated data for module: ${moduleName}`);
-                if (currentPanel) {
+                // Setup cache args (requires context)
+                let cacheArgs: string[] = [];
+                if (context) {
+                  try {
+                    const cacheDir = vscode.Uri.joinPath(context.globalStorageUri, 'cache');
+                    const cacheDirPath = cacheDir.fsPath;
+                    const storageDir = context.globalStorageUri.fsPath;
+                    if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true });
+                    if (!fs.existsSync(cacheDirPath)) fs.mkdirSync(cacheDirPath, { recursive: true });
+                    const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
+                    const cacheFilePath = path.join(cacheDirPath, `${workspaceName}.rescriptdep_cache.marshal`);
+                    cacheArgs = ['--cache-file', cacheFilePath];
+                  } catch (error) { console.error('Error setting up cache dir for focus:', error); }
+                }
+
+                // Define the core arguments for the CLI
+                const coreArgs = [
+                  '--format=json',
+                  '--module',
+                  moduleName,
+                  bsDir
+                ];
+                const fullArgs = [...cacheArgs, ...coreArgs];
+
+                // Get JSON format data
+                const jsonContent = await runRescriptDep(cliPath, fullArgs, context); // Pass context
+
+                if (token.isCancellationRequested) return;
+
+                if (jsonContent && currentPanel) { // Check panel existence again
+                  // Parse data to update title correctly
+                  let panelTitle = 'ReScript Dependencies';
+                  try {
+                    const parsedData = JSON.parse(jsonContent);
+                    const foundModule = parsedData.modules?.find((m: ModuleNode) => m.name === moduleName);
+                    if (foundModule) {
+                      panelTitle = `Module: ${moduleName} Dependencies`;
+                    } else {
+                      console.warn(`Focused module ${moduleName} not found in CLI response for title update.`);
+                    }
+                  } catch (e) {
+                    console.error("Error parsing JSON for title update:", e);
+                  }
+                  currentPanel.title = panelTitle;
+
+                  const currentIsDarkTheme = vscode.window.activeColorTheme?.kind === vscode.ColorThemeKind.Dark;
                   currentPanel.webview.postMessage({
                     command: 'updateGraph',
                     jsonContent: jsonContent,
                     focusedModule: moduleName,
                     isDarkTheme: currentIsDarkTheme
                   });
+                } else if (!jsonContent) {
+                  vscode.window.showErrorMessage(`Failed to generate dependency data for ${moduleName}`);
+                } else {
+                  console.warn("Panel closed before focusModule update could be sent.");
                 }
-              } else {
-                vscode.window.showErrorMessage(`Failed to generate dependency data for ${moduleName}`);
-              }
-            });
-          } catch (error) {
-            vscode.window.showErrorMessage(`Error analyzing module dependencies: ${error}`);
-          }
-          break;
+              });
+            } catch (error) {
+              vscode.window.showErrorMessage(`Error analyzing module dependencies: ${error}`);
+            }
+            break;
 
-        case 'webviewReady':
-          console.log("Webview is ready to receive messages");
-          break;
-      }
-    },
-    undefined,
-    context.subscriptions
-  );
+          case 'webviewReady':
+            break;
+        }
+      },
+      undefined,
+      context.subscriptions
+    );
+  }
 }
 
 // Helper function to get webview URIs for local files
@@ -1165,22 +1261,48 @@ async function findModuleInProject(moduleName: string): Promise<{ path: string, 
   if (!workspaceFolders) return null;
 
   // File extensions and directory list
-  const extensions = ['.res', '.re', '.ml'];
-  const rootPath = workspaceFolders[0].uri.fsPath;
-
-  // File search pattern
-  const filePattern = `**/{${moduleName},${moduleName.toLowerCase()}}${extensions.join(',')}`;
+  const extensions = ['.res', '.resi', '.re', '.rei', '.ml', '.mli']; // Common ReScript/OCaml extensions
+  const rootPath = workspaceFolders[0].uri.fsPath; // Use first workspace root
 
   try {
-    const files = await vscode.workspace.findFiles(filePattern, '**/node_modules/**');
+    // Search for files named ModuleName.ext or moduleName.ext
+    // Construct a glob pattern that matches case-insensitively if possible, or covers common casings
+    const patterns = extensions.map(ext => `**/${moduleName}${ext}`);
+    // Add lowercased version if different (simple case-insensitivity approximation)
+    if (moduleName !== moduleName.toLowerCase()) {
+      patterns.push(...extensions.map(ext => `**/${moduleName.toLowerCase()}${ext}`));
+    }
+
+    // Use findFiles with multiple patterns if needed, or a single complex one
+    const filePattern = `{${patterns.join(',')}}`;
+
+    const files = await vscode.workspace.findFiles(
+      filePattern,
+      '**/node_modules/**', // Standard exclusion
+      10 // Limit results
+    );
+
     if (files.length > 0) {
+      // Prioritize .res over .resi, then .re over .rei, etc.
+      const preferredOrder = ['.res', '.re', '.ml'];
+      let bestMatch: vscode.Uri | undefined;
+
+      for (const ext of preferredOrder) {
+        bestMatch = files.find(f => f.fsPath.endsWith(`${moduleName}${ext}`));
+        if (bestMatch) break;
+      }
+      // Fallback to the first file found if no preferred extension matches
+      const targetFile = bestMatch || files[0];
+
       return {
-        path: files[0].fsPath,
+        path: targetFile.fsPath,
         line: 1 // Default to first line
       };
+    } else {
+      // console.log(`Module file not found via glob: ${moduleName}`); // Removed log
     }
   } catch (error) {
-    console.error("Error finding module:", error);
+    console.error("Error finding module via findFiles:", error);
   }
 
   return null;

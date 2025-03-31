@@ -1,0 +1,18 @@
+{
+  "name": "@greenlabs/bindings",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "res:build": "rescript",
+    "res:clean": "rescript clean",
+    "res:watch": "rescript -w"
+  },
+  "peerDependencies": {
+    "react-router-dom": "*"
+  },
+  "devDependencies": {
+    "@rescript/react": "^0.13.1",
+    "rescript": "12.0.0-alpha.6",
+    "rescript-webapi": "^0.10.0"
+  }
+}

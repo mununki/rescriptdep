@@ -1,0 +1,9 @@
+{
+  "name": "test-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r res:build"
+  },
+  "packageManager": "pnpm@10.6.4"
+}

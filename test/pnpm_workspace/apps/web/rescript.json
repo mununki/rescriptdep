@@ -1,0 +1,37 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "jsx": {
+    "version": 4,
+    "mode": "automatic"
+  },
+  "sources": [
+    {
+      "dir": "src",
+      "subdirs": true
+    }
+  ],
+  "package-specs": [
+    {
+      "module": "esmodule",
+      "in-source": true
+    }
+  ],
+  "suffix": ".mjs",
+  "namespace": false,
+  "pinned-dependencies": [],
+  "bs-dependencies": [
+    "@greenlabs/bindings",
+    "@rescript/core",
+    "@rescript/react"
+  ],
+  "bs-dev-dependencies": [],
+  "ppx-flags": [],
+  "warnings": {
+    "error": true,
+    "number": "-48"
+  },
+  "bsc-flags": [
+    "-open RescriptCore"
+  ]
+}

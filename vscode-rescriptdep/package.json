@@ -25,8 +25,8 @@
     "Other"
   ],
   "activationEvents": [
-    "workspaceContains:bsconfig.json",
-    "workspaceContains:rescript.json"
+    "workspaceContains:**/bsconfig.json",
+    "workspaceContains:**/rescript.json"
   ],
   "main": "./dist/extension.js",
   "contributes": {
