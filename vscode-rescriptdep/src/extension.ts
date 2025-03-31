@@ -158,6 +158,54 @@ async function findProjectRootForFile(filePath: string, workspaceRoot: string): 
   return undefined;
 }
 
+// Helper function to detect monorepo and find all projects with ReScript config
+async function detectMonorepoProjects(workspaceRoot: string): Promise<vscode.Uri[]> {
+  // Find all bsconfig.json or rescript.json files in the workspace
+  const bsconfigFiles = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(workspaceRoot, '**/bsconfig.json'),
+    '**/node_modules/**', // exclude node_modules
+  );
+
+  const rescriptFiles = await vscode.workspace.findFiles(
+    new vscode.RelativePattern(workspaceRoot, '**/rescript.json'),
+    '**/node_modules/**', // exclude node_modules
+  );
+
+  // Combine both types of config files
+  const allConfigFiles = [...bsconfigFiles, ...rescriptFiles];
+
+  // If there's more than one config file, it might be a monorepo
+  if (allConfigFiles.length > 1) {
+    return allConfigFiles;
+  }
+
+  return [];
+}
+
+// Function to prompt user to select a project from a monorepo
+async function selectMonorepoProject(projects: vscode.Uri[]): Promise<string | undefined> {
+  // Create QuickPick items from project paths
+  const items = projects.map(uri => {
+    const relativePath = vscode.workspace.asRelativePath(uri);
+    const projectDir = path.dirname(uri.fsPath);
+    const projectName = path.basename(projectDir);
+
+    return {
+      label: projectName,
+      description: relativePath,
+      projectRoot: projectDir
+    };
+  });
+
+  // Show QuickPick to user
+  const selectedItem = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Select a ReScript project to analyze',
+    title: 'Monorepo Projects'
+  });
+
+  return selectedItem?.projectRoot;
+}
+
 // Integrated common logic into a single function
 async function generateDependencyGraph(context: vscode.ExtensionContext, focusOnModule: boolean = false) {
   // Use withProgress API to show a progress notification in the bottom right
@@ -175,65 +223,82 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
     // Use the first workspace folder as the root for searching
     const workspaceRoot = workspaceFolders[0].uri.fsPath;
 
-    // Find the initial config file (used for full graph or as fallback)
-    progress.report({ message: 'Finding ReScript config file...' });
-    const initialConfigFileUri = await findConfigFile(workspaceRoot);
+    let projectRoot: string;
+    let moduleName: string | undefined;
 
-    if (token.isCancellationRequested) return;
+    if (focusOnModule) {
+      // --- Logic when focusing on a specific module ---
+      progress.report({ message: 'Getting module information...' });
+      if (token.isCancellationRequested) return;
 
-    // If no config file is found anywhere, exit (should be caught by activationEvents)
-    if (!initialConfigFileUri) {
-      vscode.window.showErrorMessage('Could not find any bsconfig.json or rescript.json in the workspace (excluding node_modules).');
-      return;
+      // Get module name (from editor or input)
+      moduleName = getCurrentModuleNameFromActiveEditor();
+      if (!moduleName) {
+        moduleName = await vscode.window.showInputBox({
+          prompt: 'Enter module name to focus on',
+          placeHolder: 'ModuleName'
+        });
+      }
+      if (!moduleName) return; // User cancelled
+
+      // Find the source file for the target module
+      progress.report({ message: `Finding source file for ${moduleName}...` });
+      const moduleInfo = await findModuleInProject(moduleName);
+      if (!moduleInfo) {
+        vscode.window.showErrorMessage(`Could not find the source file for module: ${moduleName}`);
+        return;
+      }
+
+      // Find the project root specific to this module's source file
+      progress.report({ message: `Finding project root for ${moduleName}...` });
+      const moduleProjectRoot = await findProjectRootForFile(moduleInfo.path, workspaceRoot);
+      if (!moduleProjectRoot) {
+        vscode.window.showErrorMessage(`Could not determine the project root for module: ${moduleName} (no bsconfig/rescript.json found in parent directories).`);
+        return;
+      }
+
+      // Calculate bsDir based on the module's specific project root
+      projectRoot = moduleProjectRoot;
+    } else {
+      // Only check for monorepo and ask for project selection when not focusing on a specific module
+      // Check if this is a monorepo with multiple projects
+      progress.report({ message: 'Checking workspace structure...' });
+      const monorepoProjects = await detectMonorepoProjects(workspaceRoot);
+
+      // If it's a monorepo with multiple projects, ask user to select one
+      if (monorepoProjects.length > 1) {
+        progress.report({ message: 'Monorepo detected. Please select a project...' });
+        const selectedProjectRoot = await selectMonorepoProject(monorepoProjects);
+
+        if (!selectedProjectRoot) {
+          // User cancelled the selection
+          return;
+        }
+
+        projectRoot = selectedProjectRoot;
+      } else {
+        // Find the initial config file (used for full graph or as fallback)
+        progress.report({ message: 'Finding ReScript config file...' });
+        const initialConfigFileUri = await findConfigFile(workspaceRoot);
+
+        if (token.isCancellationRequested) return;
+
+        // If no config file is found anywhere, exit (should be caught by activationEvents)
+        if (!initialConfigFileUri) {
+          vscode.window.showErrorMessage('Could not find any bsconfig.json or rescript.json in the workspace (excluding node_modules).');
+          return;
+        }
+
+        // Use the initially found config file's location
+        projectRoot = path.dirname(initialConfigFileUri.fsPath);
+      }
     }
 
-    let projectRoot: string;
     let bsDir: string;
 
     try {
-      let moduleName: string | undefined;
-
-      // --- Logic when focusing on a specific module ---
-      if (focusOnModule) {
-        progress.report({ message: 'Getting module information...' });
-        if (token.isCancellationRequested) return;
-
-        // Get module name (from editor or input)
-        moduleName = getCurrentModuleNameFromActiveEditor();
-        if (!moduleName) {
-          moduleName = await vscode.window.showInputBox({
-            prompt: 'Enter module name to focus on',
-            placeHolder: 'ModuleName'
-          });
-        }
-        if (!moduleName) return; // User cancelled
-
-        // Find the source file for the target module
-        progress.report({ message: `Finding source file for ${moduleName}...` });
-        const moduleInfo = await findModuleInProject(moduleName);
-        if (!moduleInfo) {
-          vscode.window.showErrorMessage(`Could not find the source file for module: ${moduleName}`);
-          return;
-        }
-
-        // Find the project root specific to this module's source file
-        progress.report({ message: `Finding project root for ${moduleName}...` });
-        const moduleProjectRoot = await findProjectRootForFile(moduleInfo.path, workspaceRoot);
-        if (!moduleProjectRoot) {
-          vscode.window.showErrorMessage(`Could not determine the project root for module: ${moduleName} (no bsconfig/rescript.json found in parent directories).`);
-          return;
-        }
-
-        // Calculate bsDir based on the module's specific project root
-        projectRoot = moduleProjectRoot;
-        bsDir = path.join(projectRoot, 'lib', 'bs');
-
-      } else {
-        // --- Logic for full dependency graph ---
-        // Use the initially found config file's location
-        projectRoot = path.dirname(initialConfigFileUri.fsPath);
-        bsDir = path.join(projectRoot, 'lib', 'bs');
-      }
+      // Calculate bsDir based on the determined project root
+      bsDir = path.join(projectRoot, 'lib', 'bs');
 
       // Check if the determined bsDir exists (common check)
       if (!fs.existsSync(bsDir)) {
@@ -1209,7 +1274,7 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 const fullArgs = [...cacheArgs, ...coreArgs];
 
                 // Get JSON format data
-                const jsonContent = await runRescriptDep(cliPath, fullArgs, context); // Pass context
+                const jsonContent = await runRescriptDep(cliPath, fullArgs, context);
 
                 if (token.isCancellationRequested) return;
 
