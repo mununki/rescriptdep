@@ -2,12 +2,15 @@
 'use strict';
 
 var $$Math = require("./math.bs.js");
+var Comp0 = require("./comp0.bs.js");
 var Logger = require("./logger.bs.js");
+var JsxRuntime = require("react/jsx-runtime");
 
 function run() {
   var result = $$Math.square(5);
   Logger.log("Result: " + String(result));
+  return JsxRuntime.jsx(Comp0.make, {});
 }
 
 exports.run = run;
-/* No side effect */
+/* Comp0 Not a pure module */

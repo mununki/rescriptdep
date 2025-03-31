@@ -5,15 +5,52 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  '@rescript/react':
+    specifier: ^0.13.1
+    version: 0.13.1(react-dom@19.1.0)(react@19.1.0)
+  react:
+    specifier: ^19.1.0
+    version: 19.1.0
+  react-dom:
+    specifier: ^19.1.0
+    version: 19.1.0(react@19.1.0)
   rescript:
     specifier: ^11.1.4
     version: 11.1.4
 
 packages:
 
+  /@rescript/react@0.13.1(react-dom@19.1.0)(react@19.1.0):
+    resolution: {integrity: sha512-VIWtu/sAJyYmDVoAhit0LHDYQrW6RqZ6z8sh8san5cjEAT4klv8JWkiaSK3FGUfooUDkGUXXgKTkqyj8zRR21w==}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-dom: '>=18.0.0'
+    dependencies:
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+    dev: false
+
+  /react-dom@19.1.0(react@19.1.0):
+    resolution: {integrity: sha512-Xs1hdnE+DyKgeHJeJznQmYMIBG3TKIHJJT95Q58nHLSrElKlGQqDTR2HQ9fx5CN/Gk6Vh/kupBTDLU11/nDk/g==}
+    peerDependencies:
+      react: ^19.1.0
+    dependencies:
+      react: 19.1.0
+      scheduler: 0.26.0
+    dev: false
+
+  /react@19.1.0:
+    resolution: {integrity: sha512-FS+XFBNvn3GTAWq26joslQgWNoFu08F4kl0J4CgdNKADkdSGXQyTCnKteIAJy96Br6YbpEU1LSzV5dYtjMkMDg==}
+    engines: {node: '>=0.10.0'}
+    dev: false
+
   /rescript@11.1.4:
     resolution: {integrity: sha512-0bGU0bocihjSC6MsE3TMjHjY0EUpchyrREquLS8VsZ3ohSMD+VHUEwimEfB3kpBI1vYkw3UFZ3WD8R28guz/Vw==}
     engines: {node: '>=10'}
     hasBin: true
     requiresBuild: true
+    dev: false
+
+  /scheduler@0.26.0:
+    resolution: {integrity: sha512-NlHwttCI/l5gCPR3D1nNXtWABUmBwvZpEQiD4IXSbIDq8BzLIK/7Ir5gTFSGZDUu37K5cMNp0hFtzO38sC7gWA==}
     dev: false

@@ -183,7 +183,147 @@ module DependencyExtractor = struct
         (* For path applications, we'll use the first path *)
         extract_module_from_path p1
 
-  (* Read source file and check if a module is actually used in the code *)
+  (* Function to read a 4-byte integer in big-endian format from AST file *)
+  let read_int32_be ic =
+    let b1 = input_byte ic in
+    let b2 = input_byte ic in
+    let b3 = input_byte ic in
+    let b4 = input_byte ic in
+    (b1 lsl 24) lor (b2 lsl 16) lor (b3 lsl 8) lor b4
+
+  (* Function to read a line from binary file *)
+  let read_line_bin ic =
+    let buf = Buffer.create 128 in
+    let rec read_chars () =
+      let c = input_char ic in
+      if c = '\n' then Buffer.contents buf
+      else (
+        Buffer.add_char buf c;
+        read_chars ())
+    in
+    try read_chars () with End_of_file -> Buffer.contents buf
+
+  (* Check if a module is used in AST file - more accurate than text search *)
+  let is_module_used_in_ast ?(verbose = false) source_file module_name =
+    (* Convert source file path to potential AST path by replacing extension and modifying the path *)
+    let ast_path =
+      let source_dir = Filename.dirname source_file in
+      let source_filename = Filename.basename source_file in
+      let module_filename =
+        Filename.remove_extension source_filename
+        |> normalize_module_name |> String.lowercase_ascii
+      in
+
+      (* Try different potential locations for the AST file *)
+      let potential_paths =
+        [
+          (* 1. Direct replacement in same directory *)
+          Filename.concat source_dir (module_filename ^ ".ast");
+          (* 2. Use cmt_path but look in lib/bs/src instead of src *)
+          (let src_pattern = Str.regexp ".*/src/" in
+           try
+             let _ = Str.search_forward src_pattern source_file 0 in
+             let before_src =
+               Str.string_before source_file (Str.match_beginning ())
+             in
+             Filename.concat
+               (Filename.concat (Filename.concat before_src "lib") "bs")
+               (Filename.concat "src" (module_filename ^ ".ast"))
+           with Not_found -> "");
+          (* 3. If we're in lib/bs/src, go up one directory *)
+          (let bs_pattern = Str.regexp ".*/lib/bs/src/" in
+           try
+             let _ = Str.search_forward bs_pattern source_file 0 in
+             let before_bs_src =
+               Str.string_before source_file (Str.match_beginning ())
+             in
+             Filename.concat
+               (Filename.concat (Filename.concat before_bs_src "lib") "bs")
+               (Filename.concat "src" (module_filename ^ ".ast"))
+           with Not_found -> "");
+        ]
+      in
+
+      (* Find the first path that exists *)
+      let found_path =
+        List.find_opt Sys.file_exists
+          (List.filter (fun p -> p <> "") potential_paths)
+      in
+
+      match found_path with
+      | Some path -> path
+      | None ->
+          (* Fallback logic for special cases *)
+          if
+            Str.string_match
+              (Str.regexp "\\(.*\\)/src/\\(.*\\).res$")
+              source_file 0
+          then
+            let project_root = Str.matched_group 1 source_file in
+            let file_name = Str.matched_group 2 source_file in
+            Filename.concat
+              (Filename.concat (Filename.concat project_root "lib") "bs")
+              (Filename.concat "src" (file_name ^ ".ast"))
+          else
+            (* Last resort: try just replacing .cmt with .ast in the original path *)
+            let base_path = Filename.remove_extension source_file in
+            base_path ^ ".ast"
+    in
+
+    if verbose then Printf.printf "Looking for AST file at: %s\n" ast_path;
+
+    if not (Sys.file_exists ast_path) then (
+      if verbose then
+        Printf.printf
+          "AST file not found at %s, conservatively returning true\n" ast_path;
+      true (* If AST file doesn't exist, conservatively return true *))
+    else
+      try
+        if verbose then
+          Printf.printf "Checking module %s usage in AST file: %s\n" module_name
+            ast_path;
+
+        let ic = open_in_bin ast_path in
+
+        (* Read the number of modules (first 4 bytes) *)
+        let modules_count = read_int32_be ic in
+
+        if verbose then
+          Printf.printf "AST file contains %d module references\n" modules_count;
+
+        (* Skip the newline after the count *)
+        let _ = input_char ic in
+
+        (* Read each module reference *)
+        let found = ref false in
+
+        (* Read module references line by line until we hit a file path or find the module *)
+        for _ = 1 to modules_count do
+          let line = read_line_bin ic in
+
+          (* Check if this looks like a file path (stop if it is) *)
+          if
+            String.length line > 0
+            && (line.[0] = '/'
+               || (String.length line > 1 && line.[0] = 'C' && line.[1] = ':'))
+          then ()
+            (* Skip file paths *)
+            (* If the module name matches exactly what we're looking for *)
+          else if String.length line > 0 && line = module_name then (
+            found := true;
+            if verbose then
+              Printf.printf "Found module %s in AST file\n" module_name)
+        done;
+
+        close_in ic;
+        !found
+      with e ->
+        if verbose then
+          Printf.printf "Error reading AST file %s: %s\n" ast_path
+            (Printexc.to_string e);
+        true (* In case of error, conservatively return true *)
+
+  (* Legacy source file checking function - kept for backward compatibility *)
   let is_module_used_in_source ?(verbose = false) source_file module_name =
     if not (Sys.file_exists source_file) then true
       (* If source file doesn't exist, conservatively return true *)
@@ -259,6 +399,10 @@ module DependencyExtractor = struct
           "" (* No valid source file available *)
     in
 
+    if verbose then
+      Printf.printf "Using AST-based module dependency filtering for %s\n"
+        cmt_info.Cmt_format.cmt_modname;
+
     (* Extract module names directly from imports list *)
     (try
        List.iter
@@ -267,7 +411,7 @@ module DependencyExtractor = struct
              is_valid_module_name module_name
              && (not (is_stdlib_or_internal_module module_name))
              && (source_file = ""
-                || is_module_used_in_source ~verbose source_file module_name)
+                || is_module_used_in_ast ~verbose source_file module_name)
            then deps := module_name :: !deps)
          cmt_info.Cmt_format.cmt_imports
      with _ -> ());
