@@ -75,6 +75,8 @@ This extension doesn't require any specific settings.
 ### 0.4.0
 
 - Added AST-based dependency analysis for more accurate module dependency detection
+- Significantly improved performance with optimized caching and parallel processing
+- Reduced memory usage through efficient data structures and lazy loading
 
 ### 0.3.0
 
