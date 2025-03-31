@@ -72,6 +72,12 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
+### 0.5.0
+
+- Added monorepo support: The extension now detects and works with monorepo projects containing multiple ReScript packages
+- Improved visualization with better node positioning and relationship indicators
+- Enhanced module focus mode with clearer dependency direction highlighting
+
 ### 0.4.0
 
 - Added AST-based dependency analysis for more accurate module dependency detection
