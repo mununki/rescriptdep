@@ -72,6 +72,10 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
+### 0.4.0
+
+- Added AST-based dependency analysis for more accurate module dependency detection
+
 ### 0.3.0
 
 - Added dark theme support: The dependency graph visualization now automatically adapts to your VS Code theme
