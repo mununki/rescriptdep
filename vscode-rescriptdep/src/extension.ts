@@ -842,19 +842,26 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 width: Math.max(module.name.length * 10, 100),
                 height: 40
             }));
-            
-            // Create links for all dependencies
+            // Create a set of node IDs for quick lookup
+            const nodeIds = new Set(nodes.map(n => n.id)); // Add set for efficient lookup
+
+            // Create links for all dependencies, filtering out external ones
             const links = [];
             data.modules.forEach(module => {
-                module.dependencies.forEach(dep => {
+                // Ensure dependencies is an array before iterating
+                const dependencies = Array.isArray(module.dependencies) ? module.dependencies : [];
+                dependencies.forEach(dep => {
                     const targetName = typeof dep === 'object' ? dep.name : dep;
-                    links.push({
-                        source: module.name,
-                        target: targetName
-                    });
+                    // Check if both source and target nodes exist in our node list
+                    if (nodeIds.has(module.name) && nodeIds.has(targetName)) { // Filter links
+                        links.push({
+                            source: module.name,
+                            target: targetName
+                        });
+                    }
                 });
             });
-            
+
             // Create SVG element
             const svg = d3.select('#graph')
                 .attr('width', width)
