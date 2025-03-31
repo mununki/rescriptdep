@@ -90,12 +90,12 @@ let test_cmt_imports () =
     else filename
   in
 
-  let cmt_file = fix_path "fixtures/math.cmt" in
+  let cmt_file = fix_path "rescript/lib/bs/src/app.cmt" in
 
   (* Print the path we're trying to use *)
   printf "Trying to use path: %s\n" cmt_file;
 
-  printf "=== Testing cmt_imports for math.cmt file ===\n";
+  printf "=== Testing cmt_imports for app.cmt file ===\n";
 
   try
     (* Read cmt file *)
@@ -112,7 +112,7 @@ let test_cmt_imports () =
     in
 
     (* Output results *)
-    printf "cmt_imports found in math.cmt file excluding stdlib modules:\n";
+    printf "cmt_imports found in app.cmt file excluding stdlib modules:\n";
     List.iter
       (fun (module_name, digest_opt) ->
         match digest_opt with
