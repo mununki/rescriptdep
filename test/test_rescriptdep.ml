@@ -5,8 +5,8 @@ open Printf
 let run_rescriptdep_to_temp project_dir =
   let temp_file = Filename.temp_file "rescriptdep_" ".json" in
   let cmd =
-    Printf.sprintf "dune exec -- rescriptdep --format json %s -o %s" project_dir
-      temp_file
+    Printf.sprintf "dune exec -- rescriptdep -f json %s -o %s --no-cache"
+      project_dir temp_file
   in
   let exit_code = Sys.command cmd in
   if exit_code <> 0 then
@@ -25,7 +25,7 @@ let test_project_fixtures project_name =
   printf "Testing rescriptdep on %s project...\n" project_name;
 
   (* Create paths *)
-  let project_dir = Printf.sprintf "test/%s" project_name in
+  let project_dir = Printf.sprintf "test/%s/lib/bs" project_name in
   let reference_output = Printf.sprintf "test/fixtures/%s.json" project_name in
 
   (* Ensure fixtures directory exists *)

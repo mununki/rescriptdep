@@ -5,16 +5,47 @@
       "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rescript/src/app.res",
       "dependencies": [
         {
+          "name": "Comp0",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rescript/src/comp0.res"
+        },
+        {
           "name": "Logger",
           "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rescript/src/logger.res"
         },
         {
           "name": "Math",
           "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rescript/src/math.res"
+        },
+        {
+          "name": "React",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rescript/node_modules/@rescript/react/src"
         }
       ],
       "dependents": [],
       "fan_in": 0,
+      "fan_out": 4,
+      "in_cycle": false
+    },
+    {
+      "name": "Comp0",
+      "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rescript/src/comp0.res",
+      "dependencies": [
+        {
+          "name": "React",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rescript/node_modules/@rescript/react/src"
+        },
+        {
+          "name": "ReactDOM",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rescript/node_modules/@rescript/react/src"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "App",
+          "path": "/Users/woonki/GitHub/projects/rescriptdep/test/rescript/src/app.res"
+        }
+      ],
+      "fan_in": 1,
       "fan_out": 2,
       "in_cycle": false
     },
@@ -68,11 +99,11 @@
   ],
   "cycles": [],
   "metrics": {
-    "total_modules": 4,
-    "average_fan_in": 0.75,
-    "average_fan_out": 0.75,
-    "most_depended_upon": {"module": "Logger", "count": 1},
-    "most_dependencies": {"module": "App", "count": 2},
+    "total_modules": 5,
+    "average_fan_in": 0.8,
+    "average_fan_out": 1.4,
+    "most_depended_upon": {"module": "Comp0", "count": 1},
+    "most_dependencies": {"module": "App", "count": 4},
     "cycles_count": 0
   }
 }
