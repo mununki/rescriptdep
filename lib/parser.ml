@@ -18,6 +18,12 @@ module Cache = struct
   (* Cache storage using file paths as keys *)
   let cache_table = Hashtbl.create 100
 
+  (* AST file cache to prevent repeated file reads *)
+  let ast_cache = Hashtbl.create 100
+
+  (* AST dependency check result cache *)
+  let ast_dependency_cache = Hashtbl.create 200
+
   (* Cache file path - where the cache will be stored on disk *)
   let cache_file = ref None
 
@@ -95,6 +101,20 @@ module Cache = struct
       let entry = { module_info } in
       Hashtbl.replace cache_table path entry
 
+  (* Cache AST file data *)
+  let cache_ast_data ?(skip_cache = false) ast_path data =
+    if not skip_cache then Hashtbl.replace ast_cache ast_path data
+
+  (* Get cached AST file data *)
+  let get_ast_data ast_path = Hashtbl.find_opt ast_cache ast_path
+
+  (* Cache AST dependency check result *)
+  let cache_ast_dependency_result ?(skip_cache = false) key result =
+    if not skip_cache then Hashtbl.replace ast_dependency_cache key result
+
+  (* Get cached AST dependency check result *)
+  let get_ast_dependency_result key = Hashtbl.find_opt ast_dependency_cache key
+
   (* Find an entry in the cache, comparing digest information *)
   let find ?(verbose = false) ?(skip_cache = false) path
       current_interface_digest current_source_digest =
@@ -137,7 +157,10 @@ module Cache = struct
             None)
 
   (* Clear the cache *)
-  let clear () = Hashtbl.clear cache_table
+  let clear () =
+    Hashtbl.clear cache_table;
+    Hashtbl.clear ast_cache;
+    Hashtbl.clear ast_dependency_cache
 end
 
 (* Exceptions *)
@@ -146,21 +169,35 @@ exception Invalid_cmt_file of string
 (* Recursively scan directories for .cmt files *)
 let rec scan_directory_recursive dir =
   try
-    let files = Sys.readdir dir in
-    let cmt_files = ref [] in
+    (* Skip ___incremental directory *)
+    if
+      String.contains dir '/'
+      && Str.string_match (Str.regexp ".*___incremental.*") dir 0
+    then (
+      if false then (* Set to true for verbose debugging *)
+        Printf.printf "Skipping incremental directory: %s\n" dir;
+      [])
+    else
+      let files = Sys.readdir dir in
+      let cmt_files = ref [] in
 
-    Array.iter
-      (fun file ->
-        let path = Filename.concat dir file in
-        if Sys.is_directory path then
-          (* Recursively scan subdirectory *)
-          cmt_files := List.append (scan_directory_recursive path) !cmt_files
-        else if Filename.check_suffix file ".cmt" then
-          (* Add cmt file *)
-          cmt_files := path :: !cmt_files)
-      files;
+      Array.iter
+        (fun file ->
+          let path = Filename.concat dir file in
+          if Sys.is_directory path then (
+            if
+              (* Skip ___incremental directory *)
+              file <> "___incremental"
+            then
+              (* Recursively scan subdirectory *)
+              cmt_files :=
+                List.append (scan_directory_recursive path) !cmt_files)
+          else if Filename.check_suffix file ".cmt" then
+            (* Add cmt file *)
+            cmt_files := path :: !cmt_files)
+        files;
 
-    !cmt_files
+      !cmt_files
   with Sys_error _ ->
     Printf.printf "Warning: Could not read directory %s\n" dir;
     []
@@ -183,145 +220,222 @@ module DependencyExtractor = struct
         (* For path applications, we'll use the first path *)
         extract_module_from_path p1
 
-  (* Function to read a 4-byte integer in big-endian format from AST file *)
-  let read_int32_be ic =
-    let b1 = input_byte ic in
-    let b2 = input_byte ic in
-    let b3 = input_byte ic in
-    let b4 = input_byte ic in
-    (b1 lsl 24) lor (b2 lsl 16) lor (b3 lsl 8) lor b4
+  (* Simplified AST file path resolution - just replace extension with .ast in the same directory *)
+  let get_ast_path cmt_path =
+    let base_path = Filename.remove_extension cmt_path in
+    base_path ^ ".ast"
 
-  (* Function to read a line from binary file *)
-  let read_line_bin ic =
-    let buf = Buffer.create 128 in
-    let rec read_chars () =
-      let c = input_char ic in
-      if c = '\n' then Buffer.contents buf
-      else (
-        Buffer.add_char buf c;
-        read_chars ())
-    in
-    try read_chars () with End_of_file -> Buffer.contents buf
+  (* Function to read AST file contents efficiently *)
+  let read_ast_file ?(verbose = false) ?(skip_cache = false) ast_path =
+    (* Check if AST data is already cached *)
+    match Cache.get_ast_data ast_path with
+    | Some data when not skip_cache ->
+        if verbose then Printf.printf "Using cached AST data for %s\n" ast_path;
+        data
+    | _ -> (
+        if verbose then Printf.printf "Reading AST file: %s\n" ast_path;
+        if not (Sys.file_exists ast_path) then
+          (* Return empty list if file doesn't exist *)
+          []
+        else
+          try
+            let ic = open_in_bin ast_path in
 
-  (* Check if a module is used in AST file - more accurate than text search *)
-  let is_module_used_in_ast ?(verbose = false) source_file module_name =
-    (* Convert source file path to potential AST path by replacing extension and modifying the path *)
-    let ast_path =
-      let source_dir = Filename.dirname source_file in
-      let source_filename = Filename.basename source_file in
-      let module_filename =
-        Filename.remove_extension source_filename
-        |> normalize_module_name |> String.lowercase_ascii
-      in
+            (* Efficiently read the entire header section of the AST file *)
+            let module_count =
+              try
+                let b1 = input_byte ic in
+                let b2 = input_byte ic in
+                let b3 = input_byte ic in
+                let b4 = input_byte ic in
+                (b1 lsl 24) lor (b2 lsl 16) lor (b3 lsl 8) lor b4
+              with _ -> 0
+            in
 
-      (* Try different potential locations for the AST file *)
-      let potential_paths =
-        [
-          (* 1. Direct replacement in same directory *)
-          Filename.concat source_dir (module_filename ^ ".ast");
-          (* 2. Use cmt_path but look in lib/bs/src instead of src *)
-          (let src_pattern = Str.regexp ".*/src/" in
-           try
-             let _ = Str.search_forward src_pattern source_file 0 in
-             let before_src =
-               Str.string_before source_file (Str.match_beginning ())
-             in
-             Filename.concat
-               (Filename.concat (Filename.concat before_src "lib") "bs")
-               (Filename.concat "src" (module_filename ^ ".ast"))
-           with Not_found -> "");
-          (* 3. If we're in lib/bs/src, go up one directory *)
-          (let bs_pattern = Str.regexp ".*/lib/bs/src/" in
-           try
-             let _ = Str.search_forward bs_pattern source_file 0 in
-             let before_bs_src =
-               Str.string_before source_file (Str.match_beginning ())
-             in
-             Filename.concat
-               (Filename.concat (Filename.concat before_bs_src "lib") "bs")
-               (Filename.concat "src" (module_filename ^ ".ast"))
-           with Not_found -> "");
-        ]
-      in
+            (* Skip the newline after the count *)
+            let _ = try input_char ic with _ -> '\000' in
 
-      (* Find the first path that exists *)
-      let found_path =
-        List.find_opt Sys.file_exists
-          (List.filter (fun p -> p <> "") potential_paths)
-      in
+            (* Read all module references at once instead of line by line *)
+            let modules = ref [] in
+            let rec read_modules remaining =
+              if remaining <= 0 then !modules
+              else
+                try
+                  let buf = Buffer.create 128 in
+                  let rec read_line () =
+                    let c = input_char ic in
+                    if c = '\n' then (
+                      let line = Buffer.contents buf in
+                      if
+                        String.length line > 0
+                        && line.[0] <> '/'
+                        && (String.length line <= 1
+                           || not (line.[0] = 'C' && line.[1] = ':'))
+                      then modules := line :: !modules;
+                      read_modules (remaining - 1))
+                    else (
+                      Buffer.add_char buf c;
+                      read_line ())
+                  in
+                  read_line ()
+                with End_of_file -> !modules
+            in
 
-      match found_path with
-      | Some path -> path
-      | None ->
-          (* Fallback logic for special cases *)
-          if
-            Str.string_match
-              (Str.regexp "\\(.*\\)/src/\\(.*\\).res$")
-              source_file 0
-          then
-            let project_root = Str.matched_group 1 source_file in
-            let file_name = Str.matched_group 2 source_file in
+            let result = read_modules module_count in
+            close_in ic;
+
+            (* Cache the results *)
+            Cache.cache_ast_data ~skip_cache ast_path result;
+
+            result
+          with e ->
+            if verbose then
+              Printf.printf "Error reading AST file %s: %s\n" ast_path
+                (Printexc.to_string e);
+            [])
+
+  (* Get the CMT file path for a source file based on cmt file patterns *)
+  let get_cmt_path_for_source source_file =
+    (* Skip ___incremental directory *)
+    if
+      String.contains source_file '/'
+      && Str.string_match (Str.regexp ".*___incremental.*") source_file 0
+    then source_file ^ ".cmt" (* Return a non-existing path *)
+    else
+      (* Try direct replacement of extension first *)
+      let base_path = Filename.remove_extension source_file in
+      let direct_cmt = base_path ^ ".cmt" in
+
+      if Sys.file_exists direct_cmt then direct_cmt
+      else
+        (* Try to find in lib/bs/src if source file is in src directory *)
+        let src_pattern = Str.regexp ".*/src/\\(.*\\)\\.[a-zA-Z]+$" in
+        if Str.string_match src_pattern source_file 0 then
+          let file_path = Str.matched_group 1 source_file in
+          let project_root =
+            let src_index =
+              Str.search_forward (Str.regexp "/src/") source_file 0
+            in
+            String.sub source_file 0 src_index
+          in
+          let bs_path =
             Filename.concat
               (Filename.concat (Filename.concat project_root "lib") "bs")
-              (Filename.concat "src" (file_name ^ ".ast"))
-          else
-            (* Last resort: try just replacing .cmt with .ast in the original path *)
-            let base_path = Filename.remove_extension source_file in
-            base_path ^ ".ast"
-    in
+              "src"
+          in
+          let cmt_file = Filename.concat bs_path (file_path ^ ".cmt") in
+          if
+            Sys.file_exists cmt_file
+            && not
+                 (String.contains cmt_file '/'
+                 && Str.string_match
+                      (Str.regexp ".*___incremental.*")
+                      cmt_file 0)
+          then cmt_file
+          else direct_cmt (* Fallback to direct replacement *)
+        else direct_cmt (* Fallback to direct replacement *)
+
+  (* Optimized check if a module is used in AST file *)
+  let is_module_used_in_ast ?(verbose = false) ?(skip_cache = false) source_file
+      module_name =
+    (* Create a unique key for caching *)
+    let cache_key = source_file ^ ":" ^ module_name in
+
+    (* Check if result is already cached *)
+    match Cache.get_ast_dependency_result cache_key with
+    | Some result when not skip_cache ->
+        if verbose then
+          Printf.printf
+            "Using cached dependency check result for %s in %s: %b\n"
+            module_name source_file result;
+        result
+    | _ ->
+        (* Get corresponding CMT file to find AST file in the same location *)
+        let cmt_path = get_cmt_path_for_source source_file in
+        let ast_path = get_ast_path cmt_path in
+
+        if verbose then Printf.printf "Looking for AST file at: %s\n" ast_path;
+
+        if not (Sys.file_exists ast_path) then (
+          if verbose then
+            Printf.printf
+              "AST file not found at %s, conservatively returning true\n"
+              ast_path;
+
+          (* Cache the result *)
+          Cache.cache_ast_dependency_result ~skip_cache cache_key true;
+          true)
+        else (
+          if verbose then
+            Printf.printf "Checking module %s usage in AST file: %s\n"
+              module_name ast_path;
+
+          (* Get the module list from the AST file *)
+          let modules = read_ast_file ~verbose ~skip_cache ast_path in
+
+          (* Simple list membership check *)
+          let result = List.mem module_name modules in
+
+          (* Cache the result *)
+          Cache.cache_ast_dependency_result ~skip_cache cache_key result;
+
+          if verbose then
+            Printf.printf "Module %s %s in AST file %s\n" module_name
+              (if result then "found" else "not found")
+              ast_path;
+
+          result)
+
+  (* Batch check for module usage to avoid repeated file operations *)
+  let batch_check_modules_usage ?(verbose = false) ?(skip_cache = false)
+      source_file modules =
+    (* Get corresponding CMT file to find AST file in the same location *)
+    let cmt_path = get_cmt_path_for_source source_file in
+    let ast_path = get_ast_path cmt_path in
 
     if verbose then Printf.printf "Looking for AST file at: %s\n" ast_path;
 
     if not (Sys.file_exists ast_path) then (
       if verbose then
         Printf.printf
-          "AST file not found at %s, conservatively returning true\n" ast_path;
-      true (* If AST file doesn't exist, conservatively return true *))
-    else
-      try
-        if verbose then
-          Printf.printf "Checking module %s usage in AST file: %s\n" module_name
-            ast_path;
+          "AST file not found at %s, conservatively returning all modules\n"
+          ast_path;
 
-        let ic = open_in_bin ast_path in
+      (* Cache individual results *)
+      List.iter
+        (fun module_name ->
+          let cache_key = source_file ^ ":" ^ module_name in
+          Cache.cache_ast_dependency_result ~skip_cache cache_key true)
+        modules;
 
-        (* Read the number of modules (first 4 bytes) *)
-        let modules_count = read_int32_be ic in
+      modules (* Return all modules if AST file doesn't exist *))
+    else (
+      if verbose then
+        Printf.printf "Batch checking %d modules in AST file: %s\n"
+          (List.length modules) ast_path;
 
-        if verbose then
-          Printf.printf "AST file contains %d module references\n" modules_count;
+      (* Get the module list from the AST file *)
+      let ast_modules = read_ast_file ~verbose ~skip_cache ast_path in
 
-        (* Skip the newline after the count *)
-        let _ = input_char ic in
+      (* Filter modules that are present in the AST file *)
+      let results =
+        List.filter
+          (fun module_name ->
+            let is_used = List.mem module_name ast_modules in
 
-        (* Read each module reference *)
-        let found = ref false in
+            (* Cache individual results *)
+            let cache_key = source_file ^ ":" ^ module_name in
+            Cache.cache_ast_dependency_result ~skip_cache cache_key is_used;
 
-        (* Read module references line by line until we hit a file path or find the module *)
-        for _ = 1 to modules_count do
-          let line = read_line_bin ic in
+            is_used)
+          modules
+      in
 
-          (* Check if this looks like a file path (stop if it is) *)
-          if
-            String.length line > 0
-            && (line.[0] = '/'
-               || (String.length line > 1 && line.[0] = 'C' && line.[1] = ':'))
-          then ()
-            (* Skip file paths *)
-            (* If the module name matches exactly what we're looking for *)
-          else if String.length line > 0 && line = module_name then (
-            found := true;
-            if verbose then
-              Printf.printf "Found module %s in AST file\n" module_name)
-        done;
+      if verbose then
+        Printf.printf "Filtered %d out of %d modules in AST file\n"
+          (List.length results) (List.length modules);
 
-        close_in ic;
-        !found
-      with e ->
-        if verbose then
-          Printf.printf "Error reading AST file %s: %s\n" ast_path
-            (Printexc.to_string e);
-        true (* In case of error, conservatively return true *)
+      results)
 
   (* Legacy source file checking function - kept for backward compatibility *)
   let is_module_used_in_source ?(verbose = false) source_file module_name =
@@ -382,7 +496,8 @@ module DependencyExtractor = struct
         true (* In case of file reading failure, conservatively return true *)
 
   (* Extract dependencies from cmt_info structure *)
-  let extract_dependencies_from_cmt_info ?(verbose = false) cmt_info =
+  let extract_dependencies_from_cmt_info ?(verbose = false)
+      ?(skip_cache = false) cmt_info =
     let deps = ref [] in
 
     (* Check source file path - directly use cmt_sourcefile *)
@@ -403,18 +518,28 @@ module DependencyExtractor = struct
       Printf.printf "Using AST-based module dependency filtering for %s\n"
         cmt_info.Cmt_format.cmt_modname;
 
-    (* Extract module names directly from imports list *)
+    (* Extract potential dependency modules first *)
+    let potential_deps = ref [] in
     (try
        List.iter
          (fun (module_name, _) ->
            if
              is_valid_module_name module_name
-             && (not (is_stdlib_or_internal_module module_name))
-             && (source_file = ""
-                || is_module_used_in_ast ~verbose source_file module_name)
-           then deps := module_name :: !deps)
+             && not (is_stdlib_or_internal_module module_name)
+           then potential_deps := module_name :: !potential_deps)
          cmt_info.Cmt_format.cmt_imports
      with _ -> ());
+
+    (* If we have a valid source file, do batch filtering *)
+    if source_file <> "" then
+      let filtered_deps =
+        batch_check_modules_usage ~verbose ~skip_cache source_file
+          !potential_deps
+      in
+      deps := filtered_deps
+    else
+      (* If no source file, include all potential dependencies *)
+      deps := !potential_deps;
 
     (* Return unique dependencies *)
     List.sort_uniq String.compare !deps
@@ -642,7 +767,7 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
         (* Extract dependencies using only the parsed cmt_info *)
         let dependencies =
           DependencyExtractor.extract_dependencies_from_cmt_info ~verbose
-            cmt_info
+            ~skip_cache cmt_info
         in
 
         (* Filter out self-references and normalize *)
