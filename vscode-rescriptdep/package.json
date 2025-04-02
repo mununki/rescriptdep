@@ -38,10 +38,6 @@
       {
         "command": "bibimbob.focusModuleDependencies",
         "title": "Bibimbob: Focus On Module Dependencies"
-      },
-      {
-        "command": "bibimbob.clearCache",
-        "title": "Bibimbob: Clear Dependency Cache"
       }
     ]
   },
