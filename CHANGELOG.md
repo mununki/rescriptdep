@@ -12,9 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Static linking support for Linux environments
 - Performance benchmarking mode with `--benchmark` flag
-- Improved cache management with `--clear-cache` option
 
 ### Changed
+- Removed file-based cache persistence in favor of in-memory caching only
+- Removed `--cache-file` option completely
 - Enhanced error handling for workspace analysis
 - Improved progress reporting in VS Code extension
 

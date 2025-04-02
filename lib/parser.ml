@@ -24,75 +24,17 @@ module Cache = struct
   (* AST dependency check result cache *)
   let ast_dependency_cache = Hashtbl.create 200
 
-  (* Cache file path - where the cache will be stored on disk *)
-  let cache_file = ref None
-
-  (* Set the cache file path *)
-  let set_cache_file path = cache_file := Some path
-
-  (* Get the path of the cache file, creating default if needed *)
-  let get_cache_file () =
-    match !cache_file with
-    | Some path -> path
-    | None ->
-        let path =
-          Filename.concat (Sys.getcwd ()) ".rescriptdep_cache.marshal"
-        in
-        cache_file := Some path;
-        path
-
-  (* Initialize the cache from disk if available *)
+  (* Initialize the cache - simplified to just return false as we don't load from disk anymore *)
   let initialize ?(verbose = false) ?(skip_cache = false) () =
-    (* Skip initialization if skip_cache is set *)
-    if skip_cache then (
-      if verbose then
-        Printf.printf "Skip cache flag is set, not loading cache\n";
-      false)
-    else
-      let path = get_cache_file () in
-      if Sys.file_exists path then (
-        try
-          let ic = open_in_bin path in
-          let stored_cache : (string, cache_entry) Hashtbl.t =
-            Marshal.from_channel ic
-          in
-          close_in ic;
+    if verbose then
+      Printf.printf "File-based caching is disabled, using only memory cache\n";
+    false
 
-          (* Transfer to our in-memory cache *)
-          Hashtbl.iter (fun k v -> Hashtbl.replace cache_table k v) stored_cache;
-
-          if verbose then
-            Printf.printf "Cache loaded from %s with %d entries\n" path
-              (Hashtbl.length cache_table);
-          true
-        with e ->
-          if verbose then
-            Printf.printf "Error loading cache: %s\n" (Printexc.to_string e);
-          false)
-      else (
-        if verbose then Printf.printf "No cache file found at %s\n" path;
-        false)
-
-  (* Save the cache to disk *)
+  (* Save the cache - simplified to just return false as we don't save to disk anymore *)
   let save ?(verbose = false) ?(skip_cache = false) () =
-    (* Skip saving if skip_cache is set *)
-    if skip_cache then (
-      if verbose then Printf.printf "Skip cache flag is set, not saving cache\n";
-      false)
-    else
-      let path = get_cache_file () in
-      try
-        let oc = open_out_bin path in
-        Marshal.to_channel oc cache_table [];
-        close_out oc;
-        if verbose then
-          Printf.printf "Cache saved to %s with %d entries\n" path
-            (Hashtbl.length cache_table);
-        true
-      with e ->
-        if verbose then
-          Printf.printf "Error saving cache: %s\n" (Printexc.to_string e);
-        false
+    if verbose then
+      Printf.printf "File-based caching is disabled, not saving cache to disk\n";
+    false
 
   (* Add or update an entry in the cache *)
   let add ?(skip_cache = false) path module_info =
@@ -892,9 +834,9 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
   if !benchmark then benchmark_start := Unix.gettimeofday ();
   bench_checkpoint "Parser started";
 
-  (* Initialize the cache system *)
+  (* Initialize the memory cache system - call is kept for compatibility *)
   let _ = Cache.initialize ~verbose ~skip_cache () in
-  bench_checkpoint "Cache initialization completed";
+  bench_checkpoint "Memory cache setup completed";
 
   (* Collect all cmt files *)
   let collect_cmt_files paths =
@@ -1021,10 +963,8 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
       results)
   in
 
-  (* After all files are processed, save the cache *)
-  let _ = bench_checkpoint "Processing completed" in
-  let _ = Cache.save ~verbose ~skip_cache () in
-  bench_checkpoint "Cache saved";
+  (* After all files are processed, no need to save cache to disk anymore *)
+  bench_checkpoint "Processing completed";
 
   if !benchmark && verbose then (
     Printf.eprintf "\n[PARSER-BENCH] Summary:\n";
@@ -1036,9 +976,6 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
 
 (* Clear the module info cache *)
 let clear_cache () = Cache.clear ()
-
-(* Set the cache file path *)
-let set_cache_file path = Cache.set_cache_file path
 
 (* Set the skip cache flag - now just a stub since we pass skip_cache directly *)
 let set_skip_cache _flag = ()

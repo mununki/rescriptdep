@@ -19,17 +19,13 @@ let benchmark_path =
     then "test/fixtures" (* Use test fixtures as fallback *)
     else "/tmp" (* Default to a directory that should always exist *)
 
-let cache_path = "/tmp/rescriptdep_bench_cache.marshal"
-
 (* Environment variables *)
 let () =
   Unix.putenv "RESCRIPTDEP_BENCHMARK" "1";
   Unix.putenv "RESCRIPTDEP_VERBOSE" "1"
 
 let run_benchmark () =
-  (* Set up the cache file and ensure it doesn't exist *)
-  set_cache_file cache_path;
-  if Sys.file_exists cache_path then Sys.remove cache_path;
+  (* Clear memory cache to ensure fresh analysis *)
   clear_cache ();
 
   (* Run the analysis *)
@@ -67,7 +63,6 @@ let () =
       exit 1);
 
     Printf.printf "Running benchmark on %s\n" benchmark_path;
-    Printf.printf "Cache file: %s\n" cache_path;
 
     let _ = run_benchmark () in
     ())
