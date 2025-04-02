@@ -30,7 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
 // Helper function to get current module name from active editor
 function getCurrentModuleNameFromActiveEditor(): string | undefined {
   const editor = vscode.window.activeTextEditor;
-  if (!editor) return undefined;
+  if (!editor) { return undefined; }
 
   const document = editor.document;
   const fileName = document.fileName;
@@ -105,7 +105,6 @@ async function findProjectRootForFile(filePath: string, workspaceRoot: string): 
   if (fs.existsSync(bsconfigPath) || fs.existsSync(rescriptPath)) {
     return workspaceRoot;
   }
-
 
   // Return undefined if no config file found up to the workspace root
   return undefined;
@@ -182,7 +181,7 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
     if (focusOnModule) {
       // --- Logic when focusing on a specific module ---
       progress.report({ message: 'Getting module information...' });
-      if (token.isCancellationRequested) return;
+      if (token.isCancellationRequested) { return; }
 
       // Get module name (from editor or input)
       moduleName = getCurrentModuleNameFromActiveEditor();
@@ -192,7 +191,7 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
           placeHolder: 'ModuleName'
         });
       }
-      if (!moduleName) return; // User cancelled
+      if (!moduleName) { return; } // User cancelled
 
       // Find the source file for the target module
       progress.report({ message: `Finding source file for ${moduleName}...` });
@@ -234,7 +233,7 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
         progress.report({ message: 'Finding ReScript config file...' });
         const initialConfigFileUri = await findConfigFile(workspaceRoot);
 
-        if (token.isCancellationRequested) return;
+        if (token.isCancellationRequested) { return; }
 
         // If no config file is found anywhere, exit (should be caught by activationEvents)
         if (!initialConfigFileUri) {
@@ -261,12 +260,12 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
 
       // Find CLI path
       progress.report({ message: 'Finding CLI path...' });
-      if (token.isCancellationRequested) return;
+      if (token.isCancellationRequested) { return; }
       const cliPath = await findRescriptDepCLI(context);
 
       // Run the CLI command with the determined bsDir and moduleName (if applicable)
       progress.report({ message: 'Running rescriptdep CLI...' });
-      if (token.isCancellationRequested) return;
+      if (token.isCancellationRequested) { return; }
 
       // Define CLI arguments
       const args: string[] = ['--format=json'];
@@ -284,7 +283,7 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
 
       // Display webview
       progress.report({ message: 'Generating visualization...' });
-      if (token.isCancellationRequested) return;
+      if (token.isCancellationRequested) { return; }
 
       if (jsonContent) {
         showGraphWebview(context, jsonContent, focusOnModule, moduleName);
@@ -1222,7 +1221,7 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 // Get JSON format data
                 const jsonContent = await runRescriptDep(cliPath, args, context);
 
-                if (token.isCancellationRequested) return;
+                if (token.isCancellationRequested) { return; }
 
                 if (jsonContent && currentPanel) { // Check panel existence again
                   // Parse data to update title correctly
@@ -1276,7 +1275,7 @@ function getWebviewUri(webview: vscode.Webview, extensionUri: vscode.Uri, ...pat
 // Helper function to try to find the module in the project when file path is unavailable
 async function findModuleInProject(moduleName: string): Promise<{ path: string, line: number } | null> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) return null;
+  if (!workspaceFolders) { return null; }
 
   // File extensions and directory list
   const extensions = ['.res', '.resi', '.re', '.rei', '.ml', '.mli']; // Common ReScript/OCaml extensions
@@ -1307,7 +1306,7 @@ async function findModuleInProject(moduleName: string): Promise<{ path: string, 
 
       for (const ext of preferredOrder) {
         bestMatch = files.find(f => f.fsPath.endsWith(`${moduleName}${ext}`));
-        if (bestMatch) break;
+        if (bestMatch) { break; }
       }
       // Fallback to the first file found if no preferred extension matches
       const targetFile = bestMatch || files[0];
