@@ -384,11 +384,20 @@ async function runRescriptDep(cliPath: string, args: string[], context?: vscode.
   // Restore the correct Promise-based implementation using cp.execFile
   return new Promise((resolve, reject) => {
     const command = cliPath;
-    const options: cp.ExecFileOptions = {}; // Add options like cwd if needed later
+    const options: cp.ExecFileOptions = {
+      maxBuffer: 1024 * 1024 // 1MB buffer size
+    };
 
     cp.execFile(command, args, options, (error, stdout, stderr) => {
       if (error) {
         console.error(`rescriptdep stderr: ${stderr}`);
+
+        // Provide more specific error message for buffer exceeded case
+        if (error.message.includes('maxBuffer')) {
+          reject(new Error('The project has too many modules to visualize as a graph. This feature works best with smaller projects or when focusing on specific modules.'));
+          return;
+        }
+
         // Include stderr in the rejection for better debugging
         reject(new Error(`Command failed: ${command} ${args.join(' ')}\n${error.message}\nStderr: ${stderr}`));
         return;
