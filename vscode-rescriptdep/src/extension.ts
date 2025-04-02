@@ -7,7 +7,6 @@ import * as os from 'os';
 // Command IDs
 const SHOW_DEPENDENCY_GRAPH = 'bibimbob.showDependencyGraph';
 const FOCUS_MODULE_DEPENDENCIES = 'bibimbob.focusModuleDependencies';
-const CLEAR_CACHE = 'bibimbob.clearCache';
 
 // Track the current webview panel
 let currentPanel: vscode.WebviewPanel | undefined = undefined;
@@ -24,54 +23,8 @@ export function activate(context: vscode.ExtensionContext) {
     await generateDependencyGraph(context, true);
   });
 
-  // Command to clear the rescriptdep cache
-  let clearCacheCommand = vscode.commands.registerCommand(CLEAR_CACHE, async () => {
-    await clearRescriptDepCache(context);
-  });
-
   context.subscriptions.push(fullGraphCommand);
   context.subscriptions.push(focusModuleCommand);
-  context.subscriptions.push(clearCacheCommand);
-}
-
-// Function to clear the rescriptdep cache
-async function clearRescriptDepCache(context: vscode.ExtensionContext): Promise<void> {
-  return vscode.window.withProgress({
-    location: vscode.ProgressLocation.Notification,
-    title: 'ReScript: Clearing dependency cache...',
-    cancellable: false
-  }, async (progress) => {
-    try {
-      // Get cache directory using globalStorageUri instead of globalStoragePath
-      const cacheDir = vscode.Uri.joinPath(context.globalStorageUri, 'cache');
-      const cacheDirPath = cacheDir.fsPath;
-
-      if (fs.existsSync(cacheDirPath)) {
-        // Read all files in the cache directory
-        const files = fs.readdirSync(cacheDirPath);
-
-        // Delete all cache files
-        let deletedCount = 0;
-        for (const file of files) {
-          if (file.endsWith('.rescriptdep_cache.marshal')) {
-            fs.unlinkSync(path.join(cacheDirPath, file));
-            deletedCount++;
-          }
-        }
-
-        if (deletedCount > 0) {
-          vscode.window.showInformationMessage(`ReScript Dependency: Cleared ${deletedCount} cache file(s)`);
-        } else {
-          vscode.window.showInformationMessage('No ReScript dependency cache files found');
-        }
-      } else {
-        vscode.window.showInformationMessage('No ReScript dependency cache directory found');
-      }
-    } catch (error) {
-      console.error('Error clearing cache:', error);
-      vscode.window.showErrorMessage(`Failed to clear cache: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  });
 }
 
 // Helper function to get current module name from active editor
@@ -315,13 +268,19 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
       progress.report({ message: 'Running rescriptdep CLI...' });
       if (token.isCancellationRequested) return;
 
-      const cliArgs = [
-        '--format=json',
-        ...(moduleName ? ['--module', moduleName] : []),
-        bsDir // Use the bsDir calculated based on focus mode
-      ];
+      // Define CLI arguments
+      const args: string[] = ['--format=json'];
 
-      const jsonContent = await runRescriptDep(cliPath, cliArgs, context);
+      // Add module focus if specified
+      if (moduleName) {
+        args.push('--module', moduleName);
+      }
+
+      // Add bsDir target
+      args.push(bsDir);
+
+      // Get JSON format data
+      const jsonContent = await runRescriptDep(cliPath, args, context);
 
       // Display webview
       progress.report({ message: 'Generating visualization...' });
@@ -1249,32 +1208,19 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 // Find CLI path
                 const cliPath = await findRescriptDepCLI(context);
 
-                // Setup cache args (requires context)
-                let cacheArgs: string[] = [];
-                if (context) {
-                  try {
-                    const cacheDir = vscode.Uri.joinPath(context.globalStorageUri, 'cache');
-                    const cacheDirPath = cacheDir.fsPath;
-                    const storageDir = context.globalStorageUri.fsPath;
-                    if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true });
-                    if (!fs.existsSync(cacheDirPath)) fs.mkdirSync(cacheDirPath, { recursive: true });
-                    const workspaceName = vscode.workspace.workspaceFolders?.[0]?.name || 'default';
-                    const cacheFilePath = path.join(cacheDirPath, `${workspaceName}.rescriptdep_cache.marshal`);
-                    cacheArgs = ['--cache-file', cacheFilePath];
-                  } catch (error) { console.error('Error setting up cache dir for focus:', error); }
+                // Define CLI arguments
+                const args: string[] = ['--format=json'];
+
+                // Add module focus if specified
+                if (moduleName) {
+                  args.push('--module', moduleName);
                 }
 
-                // Define the core arguments for the CLI
-                const coreArgs = [
-                  '--format=json',
-                  '--module',
-                  moduleName,
-                  bsDir
-                ];
-                const fullArgs = [...cacheArgs, ...coreArgs];
+                // Add bsDir target
+                args.push(bsDir);
 
                 // Get JSON format data
-                const jsonContent = await runRescriptDep(cliPath, fullArgs, context);
+                const jsonContent = await runRescriptDep(cliPath, args, context);
 
                 if (token.isCancellationRequested) return;
 
