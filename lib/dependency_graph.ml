@@ -81,14 +81,77 @@ let has_cycle graph start_module =
 
 (* Find all cycles in the dependency graph *)
 let find_all_cycles graph =
+  (* Use a hash table to memoize visited modules and their cycles *)
+  let visited = Hashtbl.create (StringMap.cardinal graph.dependencies) in
+  let cycle_cache = Hashtbl.create (StringMap.cardinal graph.dependencies) in
+  let result = ref [] in
+
+  let rec check_cycle path module_name =
+    (* Check if this module is part of a cycle we've already processed *)
+    if Hashtbl.mem cycle_cache module_name then
+      Hashtbl.find cycle_cache module_name
+    else if List.mem module_name path then (
+      (* Cycle detected - extract just the cycle part *)
+      let cycle_start =
+        let rec find_index i = function
+          | [] -> 0
+          | x :: _ when x = module_name -> i
+          | _ :: xs -> find_index (i + 1) xs
+        in
+        find_index 0 path
+      in
+      let cycle =
+        let rec take_until n = function
+          | [] -> []
+          | x :: _ when n = 0 -> []
+          | x :: xs -> x :: take_until (n - 1) xs
+        in
+        module_name :: take_until cycle_start path |> List.rev
+      in
+      Hashtbl.add cycle_cache module_name (Some cycle);
+      Some cycle)
+    else if Hashtbl.mem visited module_name then
+      (* Already visited, no cycle through this path *)
+      None
+    else (
+      Hashtbl.add visited module_name true;
+      let new_path = module_name :: path in
+      let deps = get_dependencies graph module_name in
+
+      (* Sort dependencies to ensure consistent cycle detection *)
+      let sorted_deps = List.sort String.compare deps in
+
+      let cycle_result =
+        try List.find_map (fun dep -> check_cycle new_path dep) sorted_deps
+        with Not_found -> None
+      in
+
+      Hashtbl.add cycle_cache module_name cycle_result;
+      cycle_result)
+  in
+
+  (* Create a set to track unique cycles *)
+  let module CycleSet = Set.Make (struct
+    type t = string list
+
+    let compare = compare
+  end) in
+  let unique_cycles = ref CycleSet.empty in
+
   let modules = get_modules graph in
-  List.fold_left
-    (fun acc module_name ->
-      match has_cycle graph module_name with
-      | Some cycle when not (List.exists (fun c -> c = cycle) acc) ->
-          cycle :: acc
-      | _ -> acc)
-    [] modules
+  List.iter
+    (fun module_name ->
+      if not (Hashtbl.mem visited module_name) then
+        match check_cycle [] module_name with
+        | Some cycle ->
+            (* Only add if this exact cycle hasn't been seen before *)
+            if not (CycleSet.mem cycle !unique_cycles) then (
+              unique_cycles := CycleSet.add cycle !unique_cycles;
+              result := cycle :: !result)
+        | None -> ())
+    modules;
+
+  !result
 
 (* Topological sort of modules (dependencies first) *)
 let topological_sort graph =

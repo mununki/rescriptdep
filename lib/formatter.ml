@@ -85,15 +85,86 @@ and output_dot graph out_channel =
 (* Output as JSON format *)
 and output_json graph out_channel =
   let modules = Dependency_graph.get_modules graph in
+
+  (* Pre-compute all expensive operations once *)
   let metrics = Dependency_graph.calculate_metrics graph in
   let cycles = Dependency_graph.find_all_cycles graph in
+  let sccs = Dependency_graph.find_strongly_connected_components graph in
+
+  (* Create a lookup table for modules in cycles *)
+  let in_cycle_table = Hashtbl.create (List.length modules) in
+  List.iter
+    (fun scc ->
+      if List.length scc > 1 then
+        List.iter (fun m -> Hashtbl.replace in_cycle_table m true) scc)
+    sccs;
+
+  (* Pre-compute all module paths and create a lookup map *)
+  let path_map = Hashtbl.create (List.length modules) in
+  List.iter
+    (fun m ->
+      match Dependency_graph.get_module_path graph m with
+      | Some path -> Hashtbl.add path_map m path
+      | None -> ())
+    modules;
 
   (* Get all source directories from module paths for dependency resolution *)
-  let source_dirs =
-    modules
-    |> List.filter_map (fun m -> Dependency_graph.get_module_path graph m)
-    |> List.map Filename.dirname
-    |> List.sort_uniq String.compare
+  let source_dirs = ref [] in
+  List.iter
+    (fun m ->
+      match Dependency_graph.get_module_path graph m with
+      | Some path ->
+          let dir = Filename.dirname path in
+          if not (List.mem dir !source_dirs) then
+            source_dirs := dir :: !source_dirs
+      | None -> ())
+    modules;
+
+  (* Pre-compute all dependencies and dependents *)
+  let deps_map = Hashtbl.create (List.length modules) in
+  let dependents_map = Hashtbl.create (List.length modules) in
+
+  (* First compute all dependencies *)
+  List.iter
+    (fun m ->
+      let deps = Dependency_graph.get_dependencies graph m in
+      Hashtbl.add deps_map m deps)
+    modules;
+
+  (* Then compute all dependents using the deps map *)
+  List.iter
+    (fun m ->
+      let deps = try Hashtbl.find deps_map m with Not_found -> [] in
+      List.iter
+        (fun dep ->
+          let current_dependents =
+            try Hashtbl.find dependents_map dep with Not_found -> []
+          in
+          Hashtbl.replace dependents_map dep (m :: current_dependents))
+        deps)
+    modules;
+
+  (* Helper function to resolve path for a module *)
+  let resolve_path m =
+    try Some (Hashtbl.find path_map m)
+    with Not_found -> (
+      match Parse_utils.find_implementation_file_by_name m !source_dirs with
+      | Some p ->
+          Hashtbl.add path_map m p;
+          Some p
+      | None -> (
+          (* If not found, try to resolve from node_modules *)
+          let node_path_opt =
+            if List.length !source_dirs > 0 then
+              Parse_utils.find_external_module_path m
+                (Filename.dirname (List.hd !source_dirs))
+            else None
+          in
+          match node_path_opt with
+          | Some p ->
+              Hashtbl.add path_map m p;
+              Some p
+          | None -> None))
   in
 
   (* JSON opening *)
@@ -104,15 +175,19 @@ and output_json graph out_channel =
 
   List.iteri
     (fun i module_name ->
-      let deps = Dependency_graph.get_dependencies graph module_name in
-      let dependents = Dependency_graph.find_dependents graph module_name in
-      let path = Dependency_graph.get_module_path graph module_name in
+      let deps = try Hashtbl.find deps_map module_name with Not_found -> [] in
+      let dependents =
+        try Hashtbl.find dependents_map module_name with Not_found -> []
+      in
+      let path_opt =
+        try Some (Hashtbl.find path_map module_name) with Not_found -> None
+      in
 
       output_string out_channel "    {\n";
       output_string out_channel ("      \"name\": \"" ^ module_name ^ "\",\n");
 
       (* Add file path info if available *)
-      (match path with
+      (match path_opt with
       | Some path_str ->
           output_string out_channel ("      \"path\": \"" ^ path_str ^ "\",\n")
       | None -> output_string out_channel "      \"path\": null,\n");
@@ -124,27 +199,13 @@ and output_json graph out_channel =
         output_string out_channel "\n";
         List.iteri
           (fun j dep ->
-            let dep_path = Dependency_graph.get_module_path graph dep in
+            let dep_path_opt = resolve_path dep in
+
             output_string out_channel "        {\n";
             output_string out_channel ("          \"name\": \"" ^ dep ^ "\"");
 
-            (* Try to resolve path if it's null *)
-            let resolved_path =
-              match dep_path with
-              | Some path_str -> Some path_str
-              | None -> (
-                  match
-                    Parse_utils.find_implementation_file_by_name dep source_dirs
-                  with
-                  | Some path -> Some path
-                  | None ->
-                      (* If not found, try to resolve from node_modules *)
-                      Parse_utils.find_external_module_path dep
-                        (Filename.dirname (List.hd source_dirs)))
-            in
-
             (* Add dependency file path if available *)
-            (match resolved_path with
+            (match dep_path_opt with
             | Some path_str ->
                 output_string out_channel
                   (",\n          \"path\": \"" ^ path_str ^ "\"")
@@ -165,30 +226,17 @@ and output_json graph out_channel =
         output_string out_channel "\n";
         List.iteri
           (fun j dependent ->
-            let dependent_path =
-              match Dependency_graph.get_module_path graph dependent with
-              | Some path -> Some path
-              | None -> (
-                  match
-                    Parse_utils.find_implementation_file_by_name dependent
-                      source_dirs
-                  with
-                  | Some path -> Some path
-                  | None ->
-                      (* If not found, try to resolve from node_modules *)
-                      Parse_utils.find_external_module_path dependent
-                        (Filename.dirname (List.hd source_dirs)))
-            in
+            let dependent_path_opt = resolve_path dependent in
 
             output_string out_channel "        {\n";
             output_string out_channel
               ("          \"name\": \"" ^ dependent ^ "\"");
 
             (* Add dependent file path if available *)
-            (match dependent_path with
-            | Some path ->
+            (match dependent_path_opt with
+            | Some path_str ->
                 output_string out_channel
-                  (",\n          \"path\": \"" ^ path ^ "\"")
+                  (",\n          \"path\": \"" ^ path_str ^ "\"")
             | None -> output_string out_channel ",\n          \"path\": null");
 
             output_string out_channel "\n        }";
@@ -207,11 +255,9 @@ and output_json graph out_channel =
       output_string out_channel
         (",\n      \"fan_out\": " ^ string_of_int fan_out);
 
-      (* Check for circular dependencies *)
+      (* Check for circular dependencies using pre-computed table *)
       let is_in_cycle =
-        List.exists
-          (fun scc -> List.length scc > 1 && List.mem module_name scc)
-          (Dependency_graph.find_strongly_connected_components graph)
+        try Hashtbl.find in_cycle_table module_name with Not_found -> false
       in
       output_string out_channel
         (",\n      \"in_cycle\": " ^ string_of_bool is_in_cycle);
@@ -266,8 +312,10 @@ and output_json graph out_channel =
 
   let format_float f =
     let s = string_of_float f in
-    if String.ends_with ~suffix:"." s then s ^ "0"
-    (* Add 0 if ending with decimal point *) else s
+    let len = String.length s in
+    if len > 0 && s.[len - 1] = '.' then s ^ "0"
+    (* Add 0 if ending with decimal point *)
+      else s
   in
 
   output_string out_channel

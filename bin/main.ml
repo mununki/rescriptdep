@@ -135,6 +135,8 @@ let main () =
         | Rescriptdep.Formatter.Dot -> "dot"
         | Rescriptdep.Formatter.Json -> "json");
 
+    let output_start_time = Unix.gettimeofday () in
+
     (match !output_file with
     | Some file ->
         (* Output to file only *)
@@ -146,6 +148,13 @@ let main () =
         (* Output to stdout when no file output option is provided *)
         if !verbose then Printf.eprintf "Writing output to stdout\n";
         Rescriptdep.Formatter.output_graph !format focused_graph stdout);
+
+    let output_end_time = Unix.gettimeofday () in
+    let output_time = output_end_time -. output_start_time in
+
+    if !benchmark then
+      Printf.eprintf "[BENCH] Pure output generation: %.4f seconds\n"
+        output_time;
 
     time_checkpoint "Output generation completed";
 
