@@ -27,10 +27,65 @@ and output_dot graph out_channel =
   output_string out_channel
     "  node [shape=box, style=filled, fillcolor=lightblue];\n\n";
 
+  (* Create a lookup table for all module paths *)
+  let path_map = Hashtbl.create (List.length modules) in
+
+  (* Get all source directories from module paths for dependency resolution *)
+  let source_dirs = ref [] in
+  List.iter
+    (fun m ->
+      match Dependency_graph.get_module_path graph m with
+      | Some path ->
+          Hashtbl.add path_map m path;
+          let dir = Filename.dirname path in
+          if not (List.mem dir !source_dirs) then
+            source_dirs := dir :: !source_dirs
+      | None -> ())
+    modules;
+
+  (* Helper function to resolve path for a module *)
+  let resolve_path m =
+    try Some (Hashtbl.find path_map m)
+    with Not_found -> (
+      match Parse_utils.find_implementation_file_by_name m !source_dirs with
+      | Some p ->
+          Hashtbl.add path_map m p;
+          Some p
+      | None -> (
+          (* If not found, try to resolve from node_modules *)
+          let node_path_opt =
+            if List.length !source_dirs > 0 then
+              Parse_utils.find_external_module_path m
+                (Filename.dirname (List.hd !source_dirs))
+            else None
+          in
+          match node_path_opt with
+          | Some p ->
+              Hashtbl.add path_map m p;
+              Some p
+          | None -> None))
+  in
+
+  (* Collect all modules including external dependencies *)
+  let all_modules_set = Hashtbl.create (List.length modules * 2) in
+
+  (* Add all known modules *)
+  List.iter (fun m -> Hashtbl.replace all_modules_set m true) modules;
+
+  (* Add all dependencies *)
+  List.iter
+    (fun m ->
+      let deps = Dependency_graph.get_dependencies graph m in
+      List.iter (fun dep -> Hashtbl.replace all_modules_set dep true) deps)
+    modules;
+
+  (* Convert set to list *)
+  let all_modules = Hashtbl.fold (fun k _ acc -> k :: acc) all_modules_set [] in
+
   (* Output nodes with metadata *)
   List.iter
     (fun module_name ->
-      let path = Dependency_graph.get_module_path graph module_name in
+      let path_opt = resolve_path module_name in
       let label_parts = [ module_name ] in
 
       (* Create label with metadata *)
@@ -38,7 +93,7 @@ and output_dot graph out_channel =
 
       (* Create tooltip with file path if available *)
       let tooltip =
-        match path with
+        match path_opt with
         | Some path_str -> "tooltip=\"" ^ path_str ^ "\""
         | None -> ""
       in
@@ -47,7 +102,7 @@ and output_dot graph out_channel =
         ("  \"" ^ module_name ^ "\" [label=\"" ^ label ^ "\""
         ^ (if tooltip <> "" then ", " ^ tooltip else "")
         ^ "];\n"))
-    modules;
+    all_modules;
 
   output_string out_channel "\n";
 
