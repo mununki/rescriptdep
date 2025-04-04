@@ -10,7 +10,7 @@ const FOCUS_MODULE_DEPENDENCIES = 'bibimbob.focusModuleDependencies';
 
 // Track the current webview panel
 let currentPanel: vscode.WebviewPanel | undefined = undefined;
-// 전역 변수로 현재 DOT 콘텐츠와 모듈 상태 추적
+// Track current DOT content and module state as global variables
 let currentDotContent: string = '';
 let currentIsFocusedMode: boolean = false;
 let currentCenterModule: string | undefined = undefined;
@@ -514,7 +514,7 @@ async function runRescriptDep(cliPath: string, args: string[], context?: vscode.
 
 // Function to display DOT format graph in webview
 function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: string, isFocusedMode: boolean = false, centerModuleName?: string) {
-  // 전역 변수에 현재 상태 저장
+  // Save current state to global variables
   currentDotContent = dotContent;
   currentIsFocusedMode = isFocusedMode;
   currentCenterModule = centerModuleName;
@@ -527,77 +527,77 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
     'bgcolor="transparent" fontcolor="#e0e0e0"' :
     'bgcolor="transparent" fontcolor="#333333"';
 
-  // 노드 배경색 및 패딩 설정 - 더 명확한 색상과 스타일 적용
+  // Node background color and padding settings - apply clearer colors and styles
   const nodeStyle = isDarkTheme ?
     'node[shape=box, fontname="sans-serif", style="filled", fillcolor="#1e1e1e", margin="0.3,0.2", color="#aaaaaa", penwidth=1]' :
     'node[shape=box, fontname="sans-serif", style="filled", fillcolor="#f0f0f0", margin="0.3,0.2", color="#666666", penwidth=1]';
 
-  // 라인과 화살표 스타일 설정
+  // Line and arrow style settings
   const edgeStyle = isDarkTheme ?
     'edge[color="#555555", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]' :
     'edge[color="#cccccc", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]';
 
-  // Update DOT content - node 스타일을 직접 적용
+  // Update DOT content - apply node styles directly
   let themedDotContent = dotContent;
 
-  // 기본 속성 설정
+  // Set basic properties
   themedDotContent = themedDotContent.replace(/^(digraph\s+\w+\s*\{)/m,
     `$1\n  ${themeAttributes}\n  ${nodeStyle}\n  ${edgeStyle}\n  splines=true\n  overlap=false\n  sep="+10"`);
 
-  // 노드 스타일을 강제로 적용 - 모든 노드에 직접 스타일 추가
+  // Force apply node styles - add style directly to all nodes
   if (isDarkTheme) {
-    // 다크 테마에서는 어두운 배경색 적용
+    // Apply dark background in dark theme
     themedDotContent = themedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#1e1e1e", ');
   } else {
-    // 라이트 테마에서는 연한 회색 배경색 적용
+    // Apply light gray background in light theme
     themedDotContent = themedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#f0f0f0", ');
   }
 
-  // 포커스 모드일 때 중앙 모듈 스타일 추가
+  // Add center module style in focus mode
   if (isFocusedMode && centerModuleName) {
-    // 중앙 모듈의 노드 스타일 변경
+    // Change the style of the center module node
     const centerNodePattern = new RegExp(`\\s+(${centerModuleName})\\s*\\[`);
     themedDotContent = themedDotContent.replace(centerNodePattern, ` $1 [style="filled", fillcolor="lightgreen", `);
 
-    // 보다 강력한 엣지 색상 변경 로직 - DOT 형식에 맞춰 수정
+    // Enhanced edge color change logic - modified to match DOT format
     const lines = themedDotContent.split('\n');
     const coloredLines = lines.map(line => {
-      // 더 정확한 엣지 라인 패턴 매칭 
-      if (line.includes('->') && !line.includes('//')) { // 주석이 아닌 엣지 라인
+      // More accurate edge line pattern matching
+      if (line.includes('->') && !line.includes('//')) { // Edge line that's not a comment
         const trimmed = line.trim();
 
-        // source -> target 패턴 찾기 (속성 있는 경우와 없는 경우 모두 처리)
+        // Find source -> target pattern (handling cases with and without attributes)
         const parts = trimmed.split('->');
         if (parts.length === 2) {
           const source = parts[0].trim();
           let target = parts[1].trim();
 
-          // 세미콜론이나 속성 제거해서 순수 타겟 이름 추출
+          // Extract pure target name by removing semicolons or attributes
           const targetName = target.split(/[\[\s;]/)[0].trim();
 
-          // 이미 속성이 있는지 확인
+          // Check if attributes already exist
           const hasAttributes = target.includes('[');
 
-          // 1. dependents -> center (중앙 모듈로 들어오는 화살표)
+          // 1. dependents -> center (arrows coming into the center module)
           if (targetName === centerModuleName) {
             if (hasAttributes) {
-              // 기존 속성에 색상 추가 - 다크 테마일 때 더 어두운 색상 사용
+              // Add color to existing attributes - use darker color in dark theme
               const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
               return line.replace(/\[([^\]]*)\]/, `[color="${arrowColor}", penwidth=1.5, $1]`);
             } else {
-              // 새 속성 추가 - 다크 테마일 때 더 어두운 색상 사용
+              // Add new attributes - use darker color in dark theme
               const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
               return line.replace(/;/, ` [color="${arrowColor}", penwidth=1.5];`);
             }
           }
-          // 2. center -> dependencies (중앙 모듈에서 나가는 화살표)
+          // 2. center -> dependencies (arrows going out from the center module)
           else if (source === centerModuleName) {
             if (hasAttributes) {
-              // 기존 속성에 색상 추가 - 다크 테마일 때 더 어두운 색상 사용
+              // Add color to existing attributes - use darker color in dark theme
               const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
               return line.replace(/\[([^\]]*)\]/, `[color="${arrowColor}", penwidth=1.5, $1]`);
             } else {
-              // 새 속성 추가 - 다크 테마일 때 더 어두운 색상 사용
+              // Add new attributes - use darker color in dark theme
               const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
               return line.replace(/;/, ` [color="${arrowColor}", penwidth=1.5];`);
             }
@@ -1503,7 +1503,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                   // Detect if the current theme is dark
                   const isDarkTheme = vscode.window.activeColorTheme && vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
 
-                  // 테마 스타일 설정
+                  // Set theme style
                   const themeAttributes = isDarkTheme ?
                     'bgcolor="transparent" fontcolor="#e0e0e0"' :
                     'bgcolor="transparent" fontcolor="#333333"';
@@ -1516,64 +1516,64 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                     'edge[color="#555555", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]' :
                     'edge[color="#cccccc", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]';
 
-                  // Update DOT content - node 스타일을 직접 적용
+                  // Update DOT content - apply node styles directly
                   let themedDotContent = dotContent;
 
-                  // 기본 속성 설정
+                  // Set basic properties
                   themedDotContent = themedDotContent.replace(/^(digraph\s+\w+\s*\{)/m,
                     `$1\n  ${themeAttributes}\n  ${nodeStyle}\n  ${edgeStyle}\n  splines=true\n  overlap=false\n  sep="+10"`);
 
-                  // 노드 스타일을 강제로 적용
+                  // Force apply node styles
                   if (isDarkTheme) {
                     themedDotContent = themedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#1e1e1e", ');
                   } else {
                     themedDotContent = themedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#f0f0f0", ');
                   }
 
-                  // 포커스 모드에서 중앙 모듈 및 엣지 스타일 처리
-                  // 중앙 모듈의 노드 스타일 변경
+                  // Process center module and edge styles in focus mode
+                  // Change center module node style
                   const centerNodePattern = new RegExp(`\\s+(${moduleName})\\s*\\[`);
                   themedDotContent = themedDotContent.replace(centerNodePattern, ` $1 [style="filled", fillcolor="lightgreen", `);
 
-                  // 엣지 색상 변경
+                  // Change edge colors
                   const lines = themedDotContent.split('\n');
                   const coloredLines = lines.map(line => {
-                    // 엣지 라인 패턴 매칭
+                    // Edge line pattern matching
                     if (line.includes('->') && !line.includes('//')) {
                       const trimmed = line.trim();
 
-                      // source -> target 패턴 찾기
+                      // Find source -> target pattern
                       const parts = trimmed.split('->');
                       if (parts.length === 2) {
                         const source = parts[0].trim();
                         let target = parts[1].trim();
 
-                        // 순수 타겟 이름 추출
+                        // Extract pure target name
                         const targetName = target.split(/[\[\s;]/)[0].trim();
 
-                        // 속성 여부 확인
+                        // Check if attributes exist
                         const hasAttributes = target.includes('[');
 
-                        // 1. dependents -> center (중앙 모듈로 들어오는 화살표)
+                        // 1. dependents -> center (arrows coming into the center module)
                         if (targetName === moduleName) {
                           if (hasAttributes) {
-                            // 기존 속성에 색상 추가 - 다크 테마일 때 더 어두운 색상 사용
+                            // Add color to existing attributes - use darker color in dark theme
                             const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
                             return line.replace(/\[([^\]]*)\]/, `[color="${arrowColor}", penwidth=1.5, $1]`);
                           } else {
-                            // 새 속성 추가 - 다크 테마일 때 더 어두운 색상 사용
+                            // Add new attributes - use darker color in dark theme
                             const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
                             return line.replace(/;/, ` [color="${arrowColor}", penwidth=1.5];`);
                           }
                         }
-                        // 2. center -> dependencies (중앙 모듈에서 나가는 화살표)
+                        // 2. center -> dependencies (arrows going out from the center module)
                         else if (source === moduleName) {
                           if (hasAttributes) {
-                            // 기존 속성에 색상 추가 - 다크 테마일 때 더 어두운 색상 사용
+                            // Add color to existing attributes - use darker color in dark theme
                             const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
                             return line.replace(/\[([^\]]*)\]/, `[color="${arrowColor}", penwidth=1.5, $1]`);
                           } else {
-                            // 새 속성 추가 - 다크 테마일 때 더 어두운 색상 사용
+                            // Add new attributes - use darker color in dark theme
                             const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
                             return line.replace(/;/, ` [color="${arrowColor}", penwidth=1.5];`);
                           }
