@@ -10,6 +10,10 @@ const FOCUS_MODULE_DEPENDENCIES = 'bibimbob.focusModuleDependencies';
 
 // Track the current webview panel
 let currentPanel: vscode.WebviewPanel | undefined = undefined;
+// 전역 변수로 현재 DOT 콘텐츠와 모듈 상태 추적
+let currentDotContent: string = '';
+let currentIsFocusedMode: boolean = false;
+let currentCenterModule: string | undefined = undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   // console.log('Bibimbob is activated'); // Removed log
@@ -510,6 +514,11 @@ async function runRescriptDep(cliPath: string, args: string[], context?: vscode.
 
 // Function to display DOT format graph in webview
 function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: string, isFocusedMode: boolean = false, centerModuleName?: string) {
+  // 전역 변수에 현재 상태 저장
+  currentDotContent = dotContent;
+  currentIsFocusedMode = isFocusedMode;
+  currentCenterModule = centerModuleName;
+
   // Detect if the current theme is dark
   const isDarkTheme = vscode.window.activeColorTheme && vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
 
@@ -1249,8 +1258,19 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 // Re-render with new data
                 renderGraph();
             } else if (message.command === 'updateTheme') {
-                // Reload the page to apply new theme
-                window.location.reload();
+                // 페이지 새로고침 대신 테마를 적용하고 그래프 재렌더링
+                dotSrc = message.dotContent;
+                isFocusedMode = message.isFocusedMode;
+                centerModule = message.centerModule;
+                
+                // Apply theme changes
+                document.documentElement.style.setProperty('--dependents-color', 
+                    message.isDarkTheme ? 'steelblue' : 'lightblue');
+                document.documentElement.style.setProperty('--dependencies-color', 
+                    message.isDarkTheme ? 'indianred' : 'lightcoral');
+                
+                // Re-render with new theme
+                renderGraph();
             } else if (message.command === 'showError') {
                 // Display an error message without rendering graph
                 showErrorMessage({ message: message.errorMessage });
@@ -1323,10 +1343,13 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
   context.subscriptions.push(
     vscode.window.onDidChangeActiveColorTheme(theme => {
       const newIsDarkTheme = theme.kind === vscode.ColorThemeKind.Dark;
-      if (newIsDarkTheme !== isDarkTheme && currentPanel) {
-        // Instead of recreating the webview, just send a message to update theme
+      if (newIsDarkTheme !== isDarkTheme && currentPanel && currentDotContent) {
+        // 웹뷰에 테마 변경 명령 전송 - 페이지 리로드 대신 그래프 재렌더링
         currentPanel.webview.postMessage({
           command: 'updateTheme',
+          dotContent: currentDotContent,
+          isFocusedMode: currentIsFocusedMode,
+          centerModule: currentCenterModule,
           isDarkTheme: newIsDarkTheme
         });
       }
