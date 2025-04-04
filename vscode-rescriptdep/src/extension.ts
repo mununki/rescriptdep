@@ -901,8 +901,8 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                         head.setAttribute('stroke', arrowColor);
                     });
                     
-                    // 포커스 모드일 때 중앙 모듈 관련 엣지 색상 후처리
-                    if (centerModule) {
+                    // 포커스 모드일 때 중앙 모듈 관련 엣지 색상 처리
+                    if (isFocusedMode && centerModule) {
                         // 중앙 모듈 노드 식별 (title 텍스트가 중앙 모듈명과 일치)
                         const centerNode = Array.from(svgElement.querySelectorAll('.node')).find(node => {
                             const titleEl = node.querySelector('title');
@@ -962,6 +962,55 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                                 }
                             });
                         }
+                    } else {
+                        // 전체 모드에서 색상 구분 - dependencies(나가는 화살표)와 dependents(들어오는 화살표) 구분
+                        const edges = svgElement.querySelectorAll('.edge');
+                        const visitedNodes = new Set();
+                        
+                        // 첫 번째 패스: 모든 노드 이름 수집
+                        edges.forEach(edge => {
+                            const titleEl = edge.querySelector('title');
+                            if (titleEl && titleEl.textContent) {
+                                const titleText = titleEl.textContent;
+                                const parts = titleText.split('->');
+                                if (parts.length === 2) {
+                                    const source = parts[0].trim();
+                                    const target = parts[1].trim();
+                                    visitedNodes.add(source);
+                                    visitedNodes.add(target);
+                                }
+                            }
+                        });
+                        
+                        // 두 번째 패스: 모든 엣지 색상 수정
+                        edges.forEach(edge => {
+                            const titleEl = edge.querySelector('title');
+                            if (titleEl && titleEl.textContent) {
+                                const titleText = titleEl.textContent;
+                                const parts = titleText.split('->');
+                                if (parts.length === 2) {
+                                    const source = parts[0].trim();
+                                    const target = parts[1].trim();
+                                    
+                                    // 나가는 화살표는 dependencies 색상
+                                    const paths = edge.querySelectorAll('path');
+                                    const polygons = edge.querySelectorAll('polygon');
+                                    
+                                    // 다크 테마일 때 더 어두운 색상
+                                    const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
+                                    
+                                    paths.forEach(path => {
+                                        path.setAttribute('stroke', arrowColor);
+                                        path.setAttribute('stroke-width', '1.2');
+                                    });
+                                    
+                                    polygons.forEach(polygon => {
+                                        polygon.setAttribute('fill', arrowColor);
+                                        polygon.setAttribute('stroke', arrowColor);
+                                    });
+                                }
+                            }
+                        });
                     }
                     
                     // 초기 viewBox 설정
