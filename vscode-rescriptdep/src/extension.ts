@@ -263,12 +263,62 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
       if (token.isCancellationRequested) { return; }
       const cliPath = await findRescriptDepCLI(context);
 
+      // Check project size first if not focusing on a specific module
+      if (!focusOnModule) {
+        progress.report({ message: 'Checking project size...' });
+        try {
+          // Get a simple DOT output to estimate the number of modules
+          const sizeCheckArgs = ['--format=dot', bsDir];
+          const dotOutput = await runRescriptDep(cliPath, sizeCheckArgs, context);
+
+          // Count nodes in DOT format by finding quoted node names
+          // Each module appears as "ModuleName" [label="ModuleName", tooltip="..."] in DOT format
+          const nodeMatches = dotOutput.match(/"([^"]+)"\s*\[/g) || [];
+
+          // Filter out style definitions (like "node [shape=box...]")
+          const moduleNodes = nodeMatches.filter(match => !match.startsWith('"node ['));
+          const moduleCount = moduleNodes.length;
+
+          // Log module count for debugging
+          console.log(`Detected approximately ${moduleCount} modules in the project`);
+
+          // Prompt user if module count is high
+          if (moduleCount > 1000) {
+            const response = await vscode.window.showWarningMessage(
+              `This project contains approximately ${moduleCount} modules, which may cause performance issues or visualization errors.`,
+              'Continue Anyway', 'Focus on Module', 'Cancel'
+            );
+
+            if (response === 'Focus on Module') {
+              // User chose to focus on a specific module
+              await vscode.commands.executeCommand(FOCUS_MODULE_DEPENDENCIES);
+              return;
+            } else if (response !== 'Continue Anyway') {
+              // User chose to cancel
+              return;
+            }
+
+            // If continuing, use the DOT output we already have
+            progress.report({ message: 'Generating visualization...' });
+            if (token.isCancellationRequested) { return; }
+
+            if (dotOutput) {
+              showDotGraphWebview(context, dotOutput, focusOnModule, moduleName);
+              return;
+            }
+          }
+        } catch (error) {
+          // If check operation fails, continue anyway with regular flow
+          console.warn('Failed to estimate project size:', error);
+        }
+      }
+
       // Run the CLI command with the determined bsDir and moduleName (if applicable)
       progress.report({ message: 'Running rescriptdep CLI...' });
       if (token.isCancellationRequested) { return; }
 
-      // Define CLI arguments
-      const args: string[] = ['--format=json'];
+      // Define CLI arguments - Use DOT format instead of JSON for better performance
+      const args: string[] = ['--format=dot'];
 
       // Add module focus if specified
       if (moduleName) {
@@ -278,22 +328,51 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
       // Add bsDir target
       args.push(bsDir);
 
-      // Get JSON format data
-      const jsonContent = await runRescriptDep(cliPath, args, context);
+      // Get DOT format data
+      const dotContent = await runRescriptDep(cliPath, args, context);
 
       // Display webview
       progress.report({ message: 'Generating visualization...' });
       if (token.isCancellationRequested) { return; }
 
-      if (jsonContent) {
-        showGraphWebview(context, jsonContent, focusOnModule, moduleName);
+      if (dotContent) {
+        showDotGraphWebview(context, dotContent, focusOnModule, moduleName);
       } else {
         vscode.window.showErrorMessage('Failed to generate dependency visualization (CLI returned no content).');
       }
 
     } catch (error) {
       if (!token.isCancellationRequested) {
-        vscode.window.showErrorMessage(`Error generating dependency visualization: ${error}`);
+        // Create or update the webview to show the error
+        if (error instanceof Error) {
+          // For known memory errors, show a more helpful message
+          if (error.message.includes('Cannot enlarge memory arrays') ||
+            error.message.includes('TOTAL_MEMORY') ||
+            error.message.includes('ALLOW_MEMORY_GROWTH')) {
+
+            vscode.window.showErrorMessage(
+              'The project is too large to visualize in full. Try focusing on specific modules instead.',
+              'Focus on Module'
+            ).then(selection => {
+              if (selection === 'Focus on Module') {
+                // Trigger the focus module command
+                vscode.commands.executeCommand(FOCUS_MODULE_DEPENDENCIES);
+              }
+            });
+
+            // If webview is already open, show error there
+            if (currentPanel) {
+              currentPanel.webview.postMessage({
+                command: 'showError',
+                errorMessage: 'The project is too large to visualize in full. Try focusing on specific modules instead.'
+              });
+            }
+          } else {
+            vscode.window.showErrorMessage(`Error generating dependency visualization: ${error.message}`);
+          }
+        } else {
+          vscode.window.showErrorMessage(`Error generating dependency visualization: ${error}`);
+        }
       }
     }
   });
@@ -385,12 +464,30 @@ async function runRescriptDep(cliPath: string, args: string[], context?: vscode.
   return new Promise((resolve, reject) => {
     const command = cliPath;
     const options: cp.ExecFileOptions = {
-      maxBuffer: 1024 * 1024 // 1MB buffer size
+      maxBuffer: 10 * 1024 * 1024, // 10MB buffer size
+      timeout: 10000, // 10 second timeout
     };
 
-    cp.execFile(command, args, options, (error, stdout, stderr) => {
+    // Platform-specific CPU limiting wrapper
+    let cpuLimitedCommand = command;
+    let cpuLimitedArgs = [...args];
+
+    if (os.platform() !== 'win32') {
+      // On Unix systems (macOS/Linux), use 'nice' to limit CPU priority
+      cpuLimitedArgs = [command, ...args];
+      cpuLimitedCommand = 'nice';
+    }
+    // Note: Windows doesn't have a simple equivalent to 'nice' via command line
+
+    cp.execFile(cpuLimitedCommand, cpuLimitedArgs, options, (error, stdout, stderr) => {
       if (error) {
         console.error(`rescriptdep stderr: ${stderr}`);
+
+        // Handle timeout error specifically
+        if (error.message.includes('timeout')) {
+          reject(new Error('The operation timed out after 10 seconds. The project may be too large to analyze.'));
+          return;
+        }
 
         // Provide more specific error message for buffer exceeded case
         if (error.message.includes('maxBuffer')) {
@@ -402,6 +499,7 @@ async function runRescriptDep(cliPath: string, args: string[], context?: vscode.
         reject(new Error(`Command failed: ${command} ${args.join(' ')}\n${error.message}\nStderr: ${stderr}`));
         return;
       }
+
       if (stderr) {
         console.warn(`rescriptdep stderr: ${stderr}`);
       }
@@ -410,679 +508,752 @@ async function runRescriptDep(cliPath: string, args: string[], context?: vscode.
   });
 }
 
-// JSON module type extension
-interface ModuleNode {
-  name: string;
-  dependencies: { name: string, path?: string }[] | string[];
-  dependents: { name: string, path?: string }[] | string[];
-  fan_in: number;
-  fan_out: number;
-  in_cycle: boolean;
-  file_path?: string | null;
-  path?: string;
-  location?: { start: number; end: number } | null;
-}
-
-interface DependencyData {
-  modules: ModuleNode[];
-  cycles: string[][];
-  metrics: {
-    total_modules: number;
-    average_fan_in?: number;
-    average_fan_out?: number;
-    avg_fan_in?: number;
-    avg_fan_out?: number;
-    max_fan_in?: number;
-    max_fan_out?: number;
-    cyclic_modules?: number;
-    most_depended_upon?: { module: string, count: number };
-    most_dependencies?: { module: string, count: number };
-    cycles_count?: number;
-  };
-}
-
-// Graph webview display function
-function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string, isFocusedMode: boolean = false, centerModuleName?: string) {
-  const data = JSON.parse(jsonContent);
-  const modules = data.modules || [];
-
-  // Only find a center module if in focused mode
-  let centerModule = null;
-  if (isFocusedMode) {
-    // If centerModuleName is provided, find the module with that name
-    if (centerModuleName) {
-      // Maintain TypeScript type checking here
-      const foundModule = modules.find((m: ModuleNode) => m.name === centerModuleName);
-      centerModule = foundModule || null;
-    }
-
-    // Fallback to first module if not found
-    if (!centerModule && modules.length > 0) {
-      centerModule = modules[0];
-    }
-
-    if (!centerModule) {
-      vscode.window.showErrorMessage('No module data available');
-      return;
-    }
-  }
-
+// Function to display DOT format graph in webview
+function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: string, isFocusedMode: boolean = false, centerModuleName?: string) {
   // Detect if the current theme is dark
   const isDarkTheme = vscode.window.activeColorTheme && vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
 
-  // Define color sets based on theme
-  const colors = {
-    // Light theme colors
-    light: {
-      nodeBg: '#f3f4f6',
-      nodeBorder: '#9ca3af',
-      linkStroke: '#999',
-      textColor: '#333333',
-      centerColor: '#4CAF50',
-      dependentColor: '#2196F3',
-      dependencyColor: '#F44336',
-    },
-    // Dark theme colors
-    dark: {
-      nodeBg: '#2d2d2d',
-      nodeBorder: '#555555',
-      linkStroke: '#aaaaaa',
-      textColor: '#e0e0e0',
-      centerColor: '#5CCC60', // Brighter green for dark mode
-      dependentColor: '#42A5F5', // Brighter blue for dark mode
-      dependencyColor: '#FF5252', // Brighter red for dark mode
-    }
-  };
+  // Set appropriate graph attributes based on theme
+  const themeAttributes = isDarkTheme ?
+    'bgcolor="transparent" fontcolor="#e0e0e0"' :
+    'bgcolor="transparent" fontcolor="#333333"';
 
-  // Select appropriate color set
-  const theme = isDarkTheme ? colors.dark : colors.light;
+  // 노드 배경색 및 패딩 설정 - 더 명확한 색상과 스타일 적용
+  const nodeStyle = isDarkTheme ?
+    'node[shape=box, fontname="sans-serif", style="filled", fillcolor="#1e1e1e", margin="0.3,0.2", color="#aaaaaa", penwidth=1]' :
+    'node[shape=box, fontname="sans-serif", style="filled", fillcolor="#f0f0f0", margin="0.3,0.2", color="#666666", penwidth=1]';
 
-  // Create HTML content with theme-appropriate colors
+  // 라인과 화살표 스타일 설정
+  const edgeStyle = isDarkTheme ?
+    'edge[color="#555555", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]' :
+    'edge[color="#cccccc", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]';
+
+  // Update DOT content - node 스타일을 직접 적용
+  let themedDotContent = dotContent;
+
+  // 기본 속성 설정
+  themedDotContent = themedDotContent.replace(/^(digraph\s+\w+\s*\{)/m,
+    `$1\n  ${themeAttributes}\n  ${nodeStyle}\n  ${edgeStyle}\n  splines=true\n  overlap=false\n  sep="+10"`);
+
+  // 노드 스타일을 강제로 적용 - 모든 노드에 직접 스타일 추가
+  if (isDarkTheme) {
+    // 다크 테마에서는 어두운 배경색 적용
+    themedDotContent = themedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#1e1e1e", ');
+  } else {
+    // 라이트 테마에서는 연한 회색 배경색 적용
+    themedDotContent = themedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#f0f0f0", ');
+  }
+
+  // 포커스 모드일 때 중앙 모듈 스타일 추가
+  if (isFocusedMode && centerModuleName) {
+    // 중앙 모듈의 노드 스타일 변경
+    const centerNodePattern = new RegExp(`\\s+(${centerModuleName})\\s*\\[`);
+    themedDotContent = themedDotContent.replace(centerNodePattern, ` $1 [style="filled", fillcolor="lightgreen", `);
+
+    // 보다 강력한 엣지 색상 변경 로직 - DOT 형식에 맞춰 수정
+    const lines = themedDotContent.split('\n');
+    const coloredLines = lines.map(line => {
+      // 더 정확한 엣지 라인 패턴 매칭 
+      if (line.includes('->') && !line.includes('//')) { // 주석이 아닌 엣지 라인
+        const trimmed = line.trim();
+
+        // source -> target 패턴 찾기 (속성 있는 경우와 없는 경우 모두 처리)
+        const parts = trimmed.split('->');
+        if (parts.length === 2) {
+          const source = parts[0].trim();
+          let target = parts[1].trim();
+
+          // 세미콜론이나 속성 제거해서 순수 타겟 이름 추출
+          const targetName = target.split(/[\[\s;]/)[0].trim();
+
+          // 이미 속성이 있는지 확인
+          const hasAttributes = target.includes('[');
+
+          // 1. dependents -> center (중앙 모듈로 들어오는 화살표)
+          if (targetName === centerModuleName) {
+            if (hasAttributes) {
+              // 기존 속성에 색상 추가 - 다크 테마일 때 더 어두운 색상 사용
+              const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
+              return line.replace(/\[([^\]]*)\]/, `[color="${arrowColor}", penwidth=1.5, $1]`);
+            } else {
+              // 새 속성 추가 - 다크 테마일 때 더 어두운 색상 사용
+              const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
+              return line.replace(/;/, ` [color="${arrowColor}", penwidth=1.5];`);
+            }
+          }
+          // 2. center -> dependencies (중앙 모듈에서 나가는 화살표)
+          else if (source === centerModuleName) {
+            if (hasAttributes) {
+              // 기존 속성에 색상 추가 - 다크 테마일 때 더 어두운 색상 사용
+              const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
+              return line.replace(/\[([^\]]*)\]/, `[color="${arrowColor}", penwidth=1.5, $1]`);
+            } else {
+              // 새 속성 추가 - 다크 테마일 때 더 어두운 색상 사용
+              const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
+              return line.replace(/;/, ` [color="${arrowColor}", penwidth=1.5];`);
+            }
+          }
+        }
+      }
+      return line;
+    });
+
+    themedDotContent = coloredLines.join('\n');
+  }
+
+  // Create HTML content without embedding the data directly
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ReScript Dependency Graph</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/viz.js@2.1.2/viz.js"></script>
+    <script src="https://unpkg.com/viz.js@2.1.2/full.render.js"></script>
     <style>
+        /* 기본 스타일만 유지 */
         body {
             margin: 0;
             padding: 10px;
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
             background-color: var(--vscode-editor-background);
             color: var(--vscode-editor-foreground);
-        }
-        
-        /* CSS Variables for theme colors */
-        :root {
-            --node-bg: ${theme.nodeBg};
-            --node-border: ${theme.nodeBorder};
-            --link-stroke: ${theme.linkStroke};
-            --text-color: ${theme.textColor};
-            --center-color: ${theme.centerColor};
-            --dependent-color: ${theme.dependentColor};
-            --dependency-color: ${theme.dependencyColor};
+            overflow: hidden;
+            box-sizing: border-box;
+            width: 100%;
+            height: 100vh;
+            user-select: none;
         }
         
         #graph-container {
             width: 100%;
             height: calc(100vh - 60px);
             overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            user-select: none;
         }
+        
+        #graph {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            cursor: move;
+            user-select: none;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 10px;
+            gap: 10px;
+            position: relative;
+            z-index: 10;
+        }
+        
+        button {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+        
+        .zoom-controls {
+            display: flex;
+            gap: 5px;
+        }
+
+        /* 레전드 스타일 - 라인으로 변경 */
         .legend {
             display: flex;
             justify-content: center;
             margin-bottom: 10px;
+            gap: 20px;
+            position: relative;
+            z-index: 10;
         }
+        
         .legend-item {
             display: flex;
             align-items: center;
-            margin-right: 20px;
         }
-        .legend-color {
-            width: 15px;
-            height: 15px;
+        
+        .legend-line {
+            width: 24px;
+            height: 2px;
             margin-right: 5px;
-            border-radius: 3px;
-            background-color: var(--node-bg);
-            border: 1px solid var(--node-border);
-            position: relative;
         }
-        .legend-color::before {
-            content: '';
+        
+        /* Error message container */
+        #error-container {
             position: absolute;
-            top: -1px;
-            left: -1px;
-            width: calc(100% + 2px);
-            height: 4px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: var(--vscode-editor-background);
+            border: 1px solid var(--vscode-editorError-foreground);
+            padding: 20px;
+            border-radius: 5px;
+            max-width: 80%;
+            text-align: center;
+            display: none;
+            z-index: 100;
         }
-        .legend-color.center-color::before {
-            background-color: var(--center-color);
+        
+        #error-message {
+            color: var(--vscode-editorError-foreground);
+            margin-bottom: 15px;
         }
-        .legend-color.dependent-color::before {
-            background-color: var(--dependent-color);
-        }
-        .legend-color.dependency-color::before {
-            background-color: var(--dependency-color);
-        }
-        .node {
-            cursor: pointer;
-        }
-        .node rect {
-            border-radius: 6px;
-            fill: var(--node-bg);
-            stroke: var(--node-border);
-            stroke-width: 1.5px;
-        }
-        .node text {
-            font-size: 12px;
-            fill: var(--text-color);
-            text-anchor: middle;
-            dominant-baseline: middle;
-        }
-        .link {
-            fill: none;
-            stroke: var(--link-stroke);
-            stroke-opacity: 0.6;
-            stroke-width: 1.5px;
-        }
-        .center-node rect {
-            stroke-width: 1.5px;
-            stroke: var(--node-border);
-        }
-        .dependent-node rect {
-            stroke-width: 1.5px;
-            stroke: var(--node-border);
-        }
-        .dependency-node rect {
-            stroke-width: 1.5px;
-            stroke: var(--node-border);
+        
+        #error-tip {
+            font-style: italic;
+            margin-top: 10px;
+            font-size: 0.9em;
         }
     </style>
 </head>
 <body>
     <div class="legend">
         <div class="legend-item">
-            <div class="legend-color dependent-color"></div>
+            <div class="legend-line" style="background-color: var(--dependents-color, lightblue);"></div>
             <span>Dependents (uses center module)</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color center-color"></div>
-            <span>Center Module</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color dependency-color"></div>
+            <div class="legend-line" style="background-color: var(--dependencies-color, lightcoral);"></div>
             <span>Dependencies (used by center module)</span>
         </div>
     </div>
     <div id="graph-container">
-        <svg id="graph"></svg>
+        <div id="graph"></div>
+        <div id="error-container">
+            <div id="error-message"></div>
+            <div id="error-tip">Try focusing on a specific module instead of viewing the entire graph.</div>
+        </div>
     </div>
+
     <script>
         const vscode = acquireVsCodeApi();
+        let svgElement;
+        // 줌 관련 변수
+        let currentZoom = 1;
+        const MIN_ZOOM = 0.1;
+        const MAX_ZOOM = 5;
+        const ZOOM_SPEED = 0.1;
         
-        // Parse JSON data
-        const data = ${JSON.stringify(data)};
-        const isFocusedMode = ${isFocusedMode};
-        const centerModule = ${JSON.stringify(centerModule)};
-        const isDarkTheme = ${isDarkTheme};
+        // 드래그 관련 변수
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        let viewBox = { x: 0, y: 0, width: 1000, height: 1000 };
         
-        // Theme colors
-        const theme = ${JSON.stringify(theme)};
+        // Initial data placeholders - will be populated via message
+        let dotSrc = '';
+        let isFocusedMode = false;
+        let centerModule = null;
         
-        // Color definitions for both themes
-        const colors = ${JSON.stringify(colors)};
+        // 테마 관련 변수
+        const isDarkTheme = document.body.classList.contains('vscode-dark');
         
-        // Create and render the dependency graph
-        function createGraph() {
-            const container = document.getElementById('graph-container');
-            const width = container.clientWidth;
-            const height = container.clientHeight;
-            
-            // Different graph rendering based on mode
-            if (isFocusedMode && centerModule) {
-                renderFocusedGraph(width, height);
-            } else {
-                renderFullGraph(width, height);
+        // 테마에 따른 색상 설정
+        document.documentElement.style.setProperty('--dependents-color', isDarkTheme ? 'steelblue' : 'lightblue');
+        document.documentElement.style.setProperty('--dependencies-color', isDarkTheme ? 'indianred' : 'lightcoral');
+        
+        // Function to show error with better UI
+        function showErrorMessage(error) {
+            // Hide graph
+            const graphElem = document.getElementById('graph');
+            if (graphElem) {
+                graphElem.style.display = 'none';
             }
+            
+            // Show error container
+            const errorContainer = document.getElementById('error-container');
+            const errorMessage = document.getElementById('error-message');
+            
+            if (errorContainer && errorMessage) {
+                // Check for common memory-related errors
+                if (error.message && (
+                    error.message.includes('Cannot enlarge memory arrays') || 
+                    error.message.includes('TOTAL_MEMORY') ||
+                    error.message.includes('ALLOW_MEMORY_GROWTH')
+                )) {
+                    errorMessage.innerHTML = 'The project is too large to visualize in the browser.<br/>Memory limit exceeded.';
+                } else {
+                    errorMessage.innerHTML = error.message || 'Unknown error occurred';
+                }
+                
+                errorContainer.style.display = 'block';
+            }
+            
+            console.error('Graph rendering error:', error);
         }
         
-        function renderFocusedGraph(width, height) {
-            // Create nodes array
-            const nodes = [
-                // Center node
-                {
-                    id: centerModule.name,
-                    type: 'center',
-                    label: centerModule.name,
-                    width: Math.max(centerModule.name.length * 10, 100),
-                    height: 40
-                }
-            ];
+        // Render the DOT data - only called after we receive data
+        function renderGraph() {
+            if (!dotSrc) {
+                console.log('No DOT data yet');
+                return;
+            }
+        
+            const viz = new Viz();
             
-            // Links array
-            const links = [];
-            
-            // Add dependent modules (those that use the center module)
-            centerModule.dependents.forEach((dep, i) => {
-                const name = typeof dep === 'object' ? dep.name : dep;
-                nodes.push({
-                    id: name,
-                    type: 'dependent',
-                    label: name,
-                    width: Math.max(name.length * 10, 100),
-                    height: 40
-                });
-                
-                links.push({
-                    source: name,
-                    target: centerModule.name,
-                    type: 'dependent'
-                });
-            });
-            
-            // Add dependency modules (those that the center module uses)
-            centerModule.dependencies.forEach((dep, i) => {
-                const name = typeof dep === 'object' ? dep.name : dep;
-                nodes.push({
-                    id: name,
-                    type: 'dependency',
-                    label: name,
-                    width: Math.max(name.length * 10, 100),
-                    height: 40
-                });
-                
-                links.push({
-                    source: centerModule.name,
-                    target: name,
-                    type: 'dependency'
-                });
-            });
-            
-            // Create SVG element
-            const svg = d3.select('#graph')
-                .attr('width', width)
-                .attr('height', height);
-            
-            // Clear any existing content
-            svg.selectAll('*').remove();
-            
-            // Add group for graph content with zoom behavior
-            const g = svg.append('g');
-            
-            // Add arrow markers for direction
-            svg.append('defs').selectAll('marker')
-                .data(['dependent', 'dependency'])
-                .enter().append('marker')
-                .attr('id', d => 'arrow-' + d)
-                .attr('viewBox', '0 -5 10 10')
-                .attr('refX', 20)
-                .attr('refY', 0)
-                .attr('markerWidth', 6)
-                .attr('markerHeight', 6)
-                .attr('orient', 'auto')
-                .append('path')
-                .attr('d', 'M0,-5L10,0L0,5')
-                .attr('fill', 'var(--link-stroke)');
-            
-            // Create the force simulation
-            const simulation = d3.forceSimulation(nodes)
-                .force('link', d3.forceLink(links).id(d => d.id).distance(200))
-                .force('charge', d3.forceManyBody().strength(-500))
-                .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('x', d3.forceX().x(d => {
-                    if (d.type === 'center') return width / 2;
-                    if (d.type === 'dependent') return width / 4;
-                    if (d.type === 'dependency') return width * 3/4;
-                    return width / 2;
-                }).strength(0.3))
-                .force('y', d3.forceY().y(height / 2).strength(0.1))
-                .force('collision', d3.forceCollide().radius(d => Math.max(d.width, d.height) / 2 + 20))
-                .on('tick', ticked);
-            
-            // Create links
-            const link = g.append('g')
-                .selectAll('line')
-                .data(links)
-                .enter().append('path')
-                .attr('class', 'link')
-                .attr('marker-end', d => 'url(#arrow-' + d.type + ')');
-            
-            // Create node groups
-            const node = g.append('g')
-                .selectAll('.node')
-                .data(nodes)
-                .enter().append('g')
-                .attr('class', d => 'node ' + d.type + '-node')
-                .call(d3.drag()
-                    .on('start', dragStarted)
-                    .on('drag', dragged)
-                    .on('end', dragEnded));
-            
-            // Add rectangles to nodes
-            node.append('rect')
-                .attr('width', d => d.width)
-                .attr('height', d => d.height)
-                .attr('x', d => -d.width / 2)
-                .attr('y', d => -d.height / 2)
-                .attr('rx', 6)
-                .attr('ry', 6);
-            
-            // Add top border to nodes based on type
-            node.append('rect')
-                .attr('width', d => d.width)
-                .attr('height', 4)
-                .attr('x', d => -d.width / 2)
-                .attr('y', d => -d.height / 2)
-                .attr('class', 'top-border')
-                .style('fill', d => {
-                    if (d.type === 'center') return 'var(--center-color)';
-                    if (d.type === 'dependent') return 'var(--dependent-color)';
-                    if (d.type === 'dependency') return 'var(--dependency-color)';
-                    return 'var(--center-color)';
+            viz.renderSVGElement(dotSrc)
+                .then(element => {
+                    // Hide any previous error
+                    const errorContainer = document.getElementById('error-container');
+                    if (errorContainer) {
+                        errorContainer.style.display = 'none';
+                    }
+                    
+                    // Show graph
+                    const graphElem = document.getElementById('graph');
+                    if (graphElem) {
+                        graphElem.style.display = 'block';
+                    }
+                    
+                    const container = document.getElementById('graph');
+                    // Remove any existing graph
+                    while (container.firstChild) {
+                        container.removeChild(container.firstChild);
+                    }
+                    
+                    container.appendChild(element);
+                    svgElement = element;
+                    
+                    // SVG 요소에 선택 방지 스타일 추가
+                    svgElement.style.userSelect = 'none';
+                    svgElement.style.webkitUserSelect = 'none';
+                    svgElement.style.msUserSelect = 'none';
+                    
+                    // SVG 내부의 모든 요소에 선택 방지 적용
+                    const allSvgElements = svgElement.querySelectorAll('*');
+                    allSvgElements.forEach(el => {
+                        el.style.userSelect = 'none';
+                        el.style.webkitUserSelect = 'none';
+                        el.style.msUserSelect = 'none';
+                    });
+                    
+                    // 테마 감지 및 클래스 추가
+                    const isDarkTheme = document.body.classList.contains('vscode-dark');
+                    if (isDarkTheme) {
+                        document.body.classList.add('dark-theme');
+                    }
+                    
+                    // SVG 직접 수정 - 모든 노드 배경색 변경
+                    const nodeRects = svgElement.querySelectorAll('.node rect, .node polygon');
+                    const bgColor = isDarkTheme ? '#1e1e1e' : '#f0f0f0';
+                    
+                    nodeRects.forEach(rect => {
+                        rect.setAttribute('fill', bgColor);
+                        // 테두리도 확실히 설정
+                        rect.setAttribute('stroke', isDarkTheme ? '#aaaaaa' : '#666666');
+                        rect.setAttribute('stroke-width', '1px');
+                        // 둥근 모서리 추가
+                        if (rect.tagName.toLowerCase() === 'rect') {
+                            rect.setAttribute('rx', '4');
+                            rect.setAttribute('ry', '4');
+                        }
+                    });
+                    
+                    // 다크 모드일 때 텍스트 색상 변경
+                    if (isDarkTheme) {
+                        const nodeTexts = svgElement.querySelectorAll('.node text');
+                        nodeTexts.forEach(text => {
+                            text.setAttribute('fill', '#cccccc'); // 옅은 회색으로 변경
+                        });
+                    }
+                    
+                    // 화살표 스타일 수정 - 테두리와 배경색 동일하게 설정
+                    const edgePaths = svgElement.querySelectorAll('.edge path');
+                    const arrowColor = isDarkTheme ? '#555555' : '#cccccc';
+                    edgePaths.forEach(path => {
+                        path.setAttribute('stroke', arrowColor);
+                        // fill은 화살표 헤드에만 영향을 주도록 설정
+                        path.setAttribute('fill', 'none');
+                        path.setAttribute('stroke-width', '1.2');
+                    });
+                    
+                    // 화살표 헤드 스타일 조정
+                    const arrowHeads = svgElement.querySelectorAll('.edge polygon');
+                    arrowHeads.forEach(head => {
+                        head.setAttribute('fill', arrowColor);
+                        head.setAttribute('stroke', arrowColor);
+                    });
+                    
+                    // 포커스 모드일 때 중앙 모듈 관련 엣지 색상 후처리
+                    if (centerModule) {
+                        // 중앙 모듈 노드 식별 (title 텍스트가 중앙 모듈명과 일치)
+                        const centerNode = Array.from(svgElement.querySelectorAll('.node')).find(node => {
+                            const titleEl = node.querySelector('title');
+                            return titleEl && titleEl.textContent === centerModule;
+                        });
+                        
+                        if (centerNode) {
+                            // 중앙 모듈로 들어오는 화살표 처리 (Dependents)
+                            const edgesTo = svgElement.querySelectorAll('.edge');
+                            edgesTo.forEach(edge => {
+                                const titleEl = edge.querySelector('title');
+                                if (titleEl && titleEl.textContent) {
+                                    const titleText = titleEl.textContent;
+                                    // 화살표 타이틀은 보통 "source->target" 형식
+                                    const parts = titleText.split('->');
+                                    if (parts.length === 2) {
+                                        const target = parts[1].trim();
+                                        const source = parts[0].trim();
+                                        
+                                        // 1. Dependents -> Center 방향
+                                        if (target === centerModule) {
+                                            const paths = edge.querySelectorAll('path');
+                                            const polygons = edge.querySelectorAll('polygon');
+                                            
+                                            // 다크 테마일 때 더 어두운 색상 사용
+                                            const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
+                                            
+                                            paths.forEach(path => {
+                                                path.setAttribute('stroke', arrowColor);
+                                                path.setAttribute('stroke-width', '1.5');
+                                            });
+                                            
+                                            polygons.forEach(polygon => {
+                                                polygon.setAttribute('fill', arrowColor);
+                                                polygon.setAttribute('stroke', arrowColor);
+                                            });
+                                        }
+                                        // 2. Center -> Dependencies 방향
+                                        else if (source === centerModule) {
+                                            const paths = edge.querySelectorAll('path');
+                                            const polygons = edge.querySelectorAll('polygon');
+                                            
+                                            // 다크 테마일 때 더 어두운 색상 사용
+                                            const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
+                                            
+                                            paths.forEach(path => {
+                                                path.setAttribute('stroke', arrowColor);
+                                                path.setAttribute('stroke-width', '1.5');
+                                            });
+                                            
+                                            polygons.forEach(polygon => {
+                                                polygon.setAttribute('fill', arrowColor);
+                                                polygon.setAttribute('stroke', arrowColor);
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    
+                    // 초기 viewBox 설정
+                    const bbox = svgElement.getBBox();
+                    viewBox = {
+                        x: bbox.x,
+                        y: bbox.y,
+                        width: bbox.width,
+                        height: bbox.height
+                    };
+                    svgElement.setAttribute('width', '100%');
+                    svgElement.setAttribute('height', '100%');
+                    
+                    // SVG 요소에 스타일 추가하여 전체 영역을 채우도록 함
+                    svgElement.style.display = 'block';
+                    svgElement.style.width = '100%';
+                    svgElement.style.height = '100%';
+                    svgElement.style.margin = '0';
+                    svgElement.style.padding = '0';
+                    
+                    // preserveAspectRatio 속성 설정하여 화면에 맞게 확장
+                    svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                    
+                    updateViewBox();
+                    
+                    // Add click handlers to nodes
+                    setupNodeClickHandlers();
+                    
+                    // Setup dragging
+                    setupDragHandlers();
+                    
+                    // 화면에 맞게 초기 뷰 조정
+                    fitGraphToContainer();
+                    
+                    // 스크롤 줌 설정
+                    setupScrollZoom();
                 })
-                .style('stroke', d => {
-                    if (d.type === 'center') return 'var(--center-color)';
-                    if (d.type === 'dependent') return 'var(--dependent-color)';
-                    if (d.type === 'dependency') return 'var(--dependency-color)';
-                    return 'var(--center-color)';
+                .catch(error => {
+                    showErrorMessage(error);
                 });
+        }
+        
+        function setupNodeClickHandlers() {
+            if (!svgElement) return;
             
-            // Add text labels
-            node.append('text')
-                .text(d => d.label);
-            
-            // Add click behavior
-            node.on('click', function(event, d) {
-                if (d.type !== 'center') {
-                    vscode.postMessage({
-                        command: 'focusModule',
-                        moduleName: d.id
+            // 모든 노드 처리
+            const nodes = svgElement.querySelectorAll('.node');
+            nodes.forEach(node => {
+                const titleEl = node.querySelector('title');
+                if (!titleEl || !titleEl.textContent) return;
+                
+                const moduleName = titleEl.textContent.trim();
+                if (!moduleName) return;
+                
+                // 중앙 모듈인지 확인
+                if (centerModule && moduleName === centerModule) {
+                    // 중앙 모듈에는 클릭 방지 스타일만 적용
+                    node.style.cursor = 'default';
+                    
+                    // 클릭 이벤트 무효화
+                    node.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }, true);
+                } else {
+                    // 일반 모듈에는 클릭 이벤트 추가
+                    node.style.cursor = 'pointer';
+                    node.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        vscode.postMessage({
+                            command: 'focusModule',
+                            moduleName: moduleName
+                        });
                     });
                 }
             });
-            
-            // Add zoom behavior
-            const zoom = d3.zoom()
-                .scaleExtent([0.2, 3])
-                .on('zoom', event => {
-                    g.attr('transform', event.transform);
-                });
-            
-            svg.call(zoom);
-            
-            // Initial zoom to fit content
-            const initialTransform = d3.zoomIdentity
-                .translate(width / 2, height / 2)
-                .scale(0.8)
-                .translate(-width / 2, -height / 2);
-            
-            svg.call(zoom.transform, initialTransform);
-            
-            // Update positions on each tick
-            function ticked() {
-                // Update link paths
-                link.attr('d', d => {
-                    // Direct connection line with slight curve
-                    const sourceNode = nodes.find(n => n.id === d.source.id || n.id === d.source);
-                    const targetNode = nodes.find(n => n.id === d.target.id || n.id === d.target);
-                    
-                    if (!sourceNode || !targetNode) return '';
-                    
-                    const sourceX = d.source.x || sourceNode.x || 0;
-                    const sourceY = d.source.y || sourceNode.y || 0;
-                    const targetX = d.target.x || targetNode.x || 0;
-                    const targetY = d.target.y || targetNode.y || 0;
-                    
-                    const dx = targetX - sourceX;
-                    const dy = targetY - sourceY;
-                    const dr = Math.sqrt(dx * dx + dy * dy) * 1.5;
-                    
-                    return "M" + sourceX + "," + sourceY + "A" + dr + "," + dr + " 0 0,1 " + targetX + "," + targetY;
-                });
-                
-                // Update node positions
-                node.attr('transform', d => "translate(" + (d.x || 0) + "," + (d.y || 0) + ")");
-            }
-            
-            // Drag functions
-            function dragStarted(event, d) {
-                if (!event.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-            }
-            
-            function dragged(event, d) {
-                d.fx = event.x;
-                d.fy = event.y;
-            }
-            
-            function dragEnded(event, d) {
-                if (!event.active) simulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
-            }
         }
         
-        function renderFullGraph(width, height) {
-            // Basic visualization for all modules
-            // Create nodes for all modules
-            const nodes = data.modules.map(module => ({
-                id: module.name,
-                label: module.name,
-                width: Math.max(module.name.length * 10, 100),
-                height: 40
-            }));
-            // Create a set of node IDs for quick lookup
-            const nodeIds = new Set(nodes.map(n => n.id)); // Add set for efficient lookup
-
-            // Create links for all dependencies, filtering out external ones
-            const links = [];
-            data.modules.forEach(module => {
-                // Ensure dependencies is an array before iterating
-                const dependencies = Array.isArray(module.dependencies) ? module.dependencies : [];
-                dependencies.forEach(dep => {
-                    const targetName = typeof dep === 'object' ? dep.name : dep;
-                    // Check if both source and target nodes exist in our node list
-                    if (nodeIds.has(module.name) && nodeIds.has(targetName)) { // Filter links
-                        links.push({
-                            source: module.name,
-                            target: targetName
-                        });
-                    }
-                });
-            });
-
-            // Create SVG element
-            const svg = d3.select('#graph')
-                .attr('width', width)
-                .attr('height', height);
+        function updateViewBox() {
+            if (!svgElement) return;
+            svgElement.setAttribute('viewBox', 
+                viewBox.x + " " + viewBox.y + " " + viewBox.width + " " + viewBox.height);
+        }
+        
+        function setupDragHandlers() {
+            if (!svgElement) return;
             
-            // Clear any existing content
-            svg.selectAll('*').remove();
+            let isDragging = false;
+            let lastX = 0;
+            let lastY = 0;
             
-            // Add group for graph content with zoom behavior
-            const g = svg.append('g');
-            
-            // Add arrow markers for direction
-            svg.append('defs').append('marker')
-                .attr('id', 'arrow')
-                .attr('viewBox', '0 -5 10 10')
-                .attr('refX', 20)
-                .attr('refY', 0)
-                .attr('markerWidth', 6)
-                .attr('markerHeight', 6)
-                .attr('orient', 'auto')
-                .append('path')
-                .attr('d', 'M0,-5L10,0L0,5')
-                .attr('fill', 'var(--link-stroke)');
-            
-            // Create the force simulation
-            const simulation = d3.forceSimulation(nodes)
-                .force('link', d3.forceLink(links).id(d => d.id).distance(150))
-                .force('charge', d3.forceManyBody().strength(-300))
-                .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('collision', d3.forceCollide().radius(d => Math.max(d.width, d.height) / 2 + 10))
-                .on('tick', ticked);
-            
-            // Create links
-            const link = g.append('g')
-                .selectAll('line')
-                .data(links)
-                .enter().append('path')
-                .attr('class', 'link')
-                .attr('marker-end', 'url(#arrow)');
-            
-            // Create node groups
-            const node = g.append('g')
-                .selectAll('.node')
-                .data(nodes)
-                .enter().append('g')
-                .attr('class', 'node')
-                .call(d3.drag()
-                    .on('start', dragStarted)
-                    .on('drag', dragged)
-                    .on('end', dragEnded));
-            
-            // Add rectangles to nodes
-            node.append('rect')
-                .attr('width', d => d.width)
-                .attr('height', d => d.height)
-                .attr('x', d => -d.width / 2)
-                .attr('y', d => -d.height / 2)
-                .attr('rx', 6)
-                .attr('ry', 6)
-                .attr('class', 'node-rect');
-            
-            // Add top border to nodes
-            node.append('rect')
-                .attr('width', d => d.width)
-                .attr('height', 4)
-                .attr('x', d => -d.width / 2)
-                .attr('y', d => -d.height / 2)
-                .attr('class', 'top-border')
-                .style('fill', 'var(--center-color)')
-                .style('stroke', 'var(--center-color)');
-            
-            // Add text labels
-            node.append('text')
-                .text(d => d.label);
-            
-            // Add click behavior
-            node.on('click', function(event, d) {
-                vscode.postMessage({
-                    command: 'focusModule',
-                    moduleName: d.id
-                });
+            // 마우스 다운 - 드래그 시작
+            svgElement.addEventListener('mousedown', (e) => {
+                e.preventDefault(); // 텍스트 선택 방지
+                isDragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                svgElement.style.cursor = 'grabbing';
             });
             
-            // Add zoom behavior
-            const zoom = d3.zoom()
-                .scaleExtent([0.1, 3])
-                .on('zoom', event => {
-                    g.attr('transform', event.transform);
-                });
-            
-            svg.call(zoom);
-            
-            // Update positions on each tick
-            function ticked() {
-                link.attr('d', d => {
-                    const dx = d.target.x - d.source.x;
-                    const dy = d.target.y - d.source.y;
-                    const dr = Math.sqrt(dx * dx + dy * dy) * 1.5;
-                    return "M" + d.source.x + "," + d.source.y + "A" + dr + "," + dr + " 0 0,1 " + d.target.x + "," + d.target.y;
-                });
+            // 마우스 이동 - 드래그 중
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
                 
-                node.attr('transform', d => "translate(" + d.x + "," + d.y + ")");
-            }
+                const dx = e.clientX - lastX;
+                const dy = e.clientY - lastY;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                
+                // 고정된 비율로 이동 - SVG 좌표계로 변환
+                const svgRect = svgElement.getBoundingClientRect();
+                
+                // SVG 스케일 계산 (1 화면 픽셀당 얼마만큼의 SVG 좌표가 표현되는지)
+                const scaleX = viewBox.width / svgRect.width;
+                const scaleY = viewBox.height / svgRect.height;
+                
+                // 동일한 이동 비율 적용
+                // x, y 모두에 같은 스케일 적용을 위해 평균값 또는 최대값 사용
+                const scale = Math.max(scaleX, scaleY);
+                
+                // viewBox 업데이트
+                viewBox.x -= dx * scale;
+                viewBox.y -= dy * scale;
+                
+                updateViewBox();
+            });
             
-            // Drag functions
-            function dragStarted(event, d) {
-                if (!event.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-            }
+            // 마우스 업 - 드래그 종료
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                svgElement.style.cursor = 'grab';
+            });
             
-            function dragged(event, d) {
-                d.fx = event.x;
-                d.fy = event.y;
-            }
+            // 마우스가 SVG 영역 밖으로 나가도 드래그 종료
+            document.addEventListener('mouseleave', () => {
+                isDragging = false;
+                svgElement.style.cursor = 'grab';
+            });
             
-            function dragEnded(event, d) {
-                if (!event.active) simulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
-            }
+            // Initial cursor style
+            svgElement.style.cursor = 'grab';
         }
         
-        // Initialize graph
-        createGraph();
-        
-        // Handle resize
-        window.addEventListener('resize', () => {
-            createGraph();
-        });
-        
-        // Update graph colors for theme change without redrawing
-        function updateGraphColors(isDark) {
-            // Get the appropriate color theme
-            const newTheme = isDark ? colors.dark : colors.light;
+        function setupScrollZoom() {
+            // 마우스 휠 이벤트
+            document.getElementById('graph-container').addEventListener('wheel', (e) => {
+                e.preventDefault();
+                
+                // 마우스 위치 가져오기
+                const svgRect = svgElement.getBoundingClientRect();
+                const mouseX = e.clientX - svgRect.left;
+                const mouseY = e.clientY - svgRect.top;
+                
+                // SVG 내의 상대적 위치 계산 (0~1 범위)
+                const relativeX = mouseX / svgRect.width;
+                const relativeY = mouseY / svgRect.height;
+                
+                // viewBox 내의 실제 좌표 계산
+                const pointX = viewBox.x + (viewBox.width * relativeX);
+                const pointY = viewBox.y + (viewBox.height * relativeY);
+                
+                // 줌 인/아웃 (휠 방향에 따라)
+                const zoomFactor = e.deltaY > 0 ? (1 - ZOOM_SPEED) : (1 + ZOOM_SPEED);
+                zoomByFactor(zoomFactor, { x: pointX, y: pointY });
+            });
             
-            // Update CSS variables
-            document.documentElement.style.setProperty('--node-bg', newTheme.nodeBg);
-            document.documentElement.style.setProperty('--node-border', newTheme.nodeBorder);
-            document.documentElement.style.setProperty('--link-stroke', newTheme.linkStroke);
-            document.documentElement.style.setProperty('--text-color', newTheme.textColor);
-            document.documentElement.style.setProperty('--center-color', newTheme.centerColor);
-            document.documentElement.style.setProperty('--dependent-color', newTheme.dependentColor);
-            document.documentElement.style.setProperty('--dependency-color', newTheme.dependencyColor);
+            // 더블 클릭 시 확대
+            document.getElementById('graph-container').addEventListener('dblclick', (e) => {
+                e.preventDefault(); // 텍스트 선택 방지
+                // 마우스 위치 가져오기
+                const svgRect = svgElement.getBoundingClientRect();
+                const mouseX = e.clientX - svgRect.left;
+                const mouseY = e.clientY - svgRect.top;
+                
+                // SVG 내의 상대적 위치 계산
+                const relativeX = mouseX / svgRect.width;
+                const relativeY = mouseY / svgRect.height;
+                
+                // viewBox 내의 실제 좌표 계산
+                const pointX = viewBox.x + (viewBox.width * relativeX);
+                const pointY = viewBox.y + (viewBox.height * relativeY);
+                
+                // 줌 인
+                zoomByFactor(0.7, { x: pointX, y: pointY });
+            });
             
-            // Force update for any SVG elements that might not be using the CSS variables
-            // Update node backgrounds
-            d3.selectAll('.node rect:not(.top-border)').style('fill', newTheme.nodeBg).style('stroke', newTheme.nodeBorder);
-            
-            // Update node borders
-            d3.selectAll('.center-node .top-border').style('fill', newTheme.centerColor).style('stroke', newTheme.centerColor);
-            d3.selectAll('.dependent-node .top-border').style('fill', newTheme.dependentColor).style('stroke', newTheme.dependentColor);
-            d3.selectAll('.dependency-node .top-border').style('fill', newTheme.dependencyColor).style('stroke', newTheme.dependencyColor);
-            
-            // Update text color
-            d3.selectAll('.node text').style('fill', newTheme.textColor);
-            
-            // Update links
-            d3.selectAll('.link').style('stroke', newTheme.linkStroke);
-            
-            // Update marker colors (arrow heads)
-            d3.selectAll('marker path').style('fill', newTheme.linkStroke);
+            // 우클릭 시 리셋
+            document.getElementById('graph-container').addEventListener('contextmenu', (e) => {
+                e.preventDefault(); // 우클릭 메뉴 방지
+                resetZoom();
+            });
         }
         
-        // Handle messages from VS Code
+        function zoomByFactor(factor, point) {
+            if (!svgElement) return;
+            
+            // 현재 줌 계산
+            const oldZoom = currentZoom;
+            currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom * factor));
+            
+            // 실제 적용할 비율 계산
+            const realFactor = currentZoom / oldZoom;
+            
+            // 포인트 위치에서의 줌 계산
+            const newWidth = viewBox.width / realFactor;
+            const newHeight = viewBox.height / realFactor;
+            
+            // 마우스 포인터 위치 기준으로 새 좌표 계산
+            const mouseRatioX = (point.x - viewBox.x) / viewBox.width;
+            const mouseRatioY = (point.y - viewBox.y) / viewBox.height;
+            
+            const newX = point.x - mouseRatioX * newWidth;
+            const newY = point.y - mouseRatioY * newHeight;
+            
+            // viewBox 업데이트
+            viewBox = {
+                x: newX,
+                y: newY,
+                width: newWidth,
+                height: newHeight
+            };
+            
+            updateViewBox();
+        }
+        
+        function resetZoom() {
+            if (!svgElement) return;
+            
+            // 그래프를 화면에 맞게 재조정
+            fitGraphToContainer();
+        }
+        
+        function fitGraphToContainer() {
+            if (!svgElement) return;
+            
+            // 컨테이너 크기 가져오기
+            const container = document.getElementById('graph-container');
+            const containerRect = container.getBoundingClientRect();
+            
+            // SVG의 viewBox 가져오기
+            const bbox = svgElement.getBBox();
+            
+            // 컨테이너 크기와 그래프 크기의 비율 계산
+            const widthRatio = containerRect.width / bbox.width;
+            const heightRatio = containerRect.height / bbox.height;
+            
+            // 더 작은 비율을 사용하여 그래프가 완전히 보이도록 함
+            const ratio = Math.min(widthRatio, heightRatio) * 0.7; // 여백을 위해 70%만 사용
+            
+            // 최대 확대 비율 제한 (노드가 적은 경우 과도한 확대 방지)
+            const limitedRatio = Math.min(ratio, 0.7);
+            
+            // 새 viewBox 계산
+            const newWidth = bbox.width * 1.5; // 좌우 여백 확보를 위해 너비 확장
+            const newHeight = bbox.height * 1.5; // 상하 여백 확보를 위해 높이 확장
+            const centerX = bbox.x + bbox.width / 2;
+            const centerY = bbox.y + bbox.height / 2;
+            
+            // 화면 중앙에 그래프가 오도록 viewBox 설정
+            viewBox = {
+                x: centerX - newWidth / 2,
+                y: centerY - newHeight / 2,
+                width: newWidth,
+                height: newHeight
+            };
+            
+            // 계산된 viewBox 적용
+            updateViewBox();
+            
+            // 초기 줌 레벨 설정
+            currentZoom = limitedRatio;
+        }
+        
+        // Listen for messages from VS Code
         window.addEventListener('message', event => {
             const message = event.data;
-            if (message.command === 'updateGraph') {
-                try {
-                    const updatedData = JSON.parse(message.jsonContent);
-                    data.modules = updatedData.modules;
-                    data.cycles = updatedData.cycles;
-                    data.metrics = updatedData.metrics;
-                    
-                    // Update center module if in focused mode
-                    if (isFocusedMode && message.focusedModule) {
-                      const foundModule = updatedData.modules.find(m => m.name === message.focusedModule);
-                      if (foundModule) {
-                        Object.assign(centerModule, foundModule);
-                      }
-                    }
-                    
-                    createGraph();
-                } catch (error) {
-                    console.error('Error updating graph:', error);
-                }
+            if (message.command === 'initGraph') {
+                // Receive the graph data from the extension
+                dotSrc = message.dotContent;
+                isFocusedMode = message.isFocusedMode;
+                centerModule = message.centerModule;
+                
+                // Now that we have data, render the graph
+                renderGraph();
+            } else if (message.command === 'updateGraph') {
+                // Update graph with new data
+                dotSrc = message.dotContent;
+                isFocusedMode = message.isFocusedMode;
+                centerModule = message.centerModule;
+                
+                // Re-render with new data
+                renderGraph();
             } else if (message.command === 'updateTheme') {
-                // Update colors without redrawing the graph
-                updateGraphColors(message.isDarkTheme);
+                // Reload the page to apply new theme
+                window.location.reload();
+            } else if (message.command === 'showError') {
+                // Display an error message without rendering graph
+                showErrorMessage({ message: message.errorMessage });
             }
         });
         
@@ -1096,13 +1267,27 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
   if (currentPanel) {
     // If we already have a panel, just update its html
     currentPanel.webview.html = htmlContent;
-    currentPanel.title = isFocusedMode && centerModule ? `Module: ${centerModule.name} Dependencies` : 'ReScript Dependencies';
+    currentPanel.title = isFocusedMode && centerModuleName ? `Module: ${centerModuleName} Dependencies` : 'ReScript Dependencies';
     currentPanel.reveal(vscode.ViewColumn.One);
+
+    // Send the graph data after the webview is loaded
+    currentPanel.webview.onDidReceiveMessage(
+      message => {
+        if (message.command === 'webviewReady') {
+          currentPanel?.webview.postMessage({
+            command: 'initGraph',
+            dotContent: themedDotContent,
+            isFocusedMode: isFocusedMode,
+            centerModule: centerModuleName
+          });
+        }
+      }
+    );
   } else {
     // Create a new panel
     currentPanel = vscode.window.createWebviewPanel(
       'bibimbobVisualizer',
-      isFocusedMode && centerModule ? `Module: ${centerModule.name} Dependencies` : 'ReScript Dependencies',
+      isFocusedMode && centerModuleName ? `Module: ${centerModuleName} Dependencies` : 'ReScript Dependencies',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -1118,6 +1303,20 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
     currentPanel.onDidDispose(() => {
       currentPanel = undefined;
     }, null, context.subscriptions);
+
+    // Send the graph data after the webview is loaded
+    currentPanel.webview.onDidReceiveMessage(
+      message => {
+        if (message.command === 'webviewReady') {
+          currentPanel?.webview.postMessage({
+            command: 'initGraph',
+            dotContent: themedDotContent,
+            isFocusedMode: isFocusedMode,
+            centerModule: centerModuleName
+          });
+        }
+      }
+    );
   }
 
   // Listen for theme changes
@@ -1125,9 +1324,7 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
     vscode.window.onDidChangeActiveColorTheme(theme => {
       const newIsDarkTheme = theme.kind === vscode.ColorThemeKind.Dark;
       if (newIsDarkTheme !== isDarkTheme && currentPanel) {
-        console.log(`Theme changed to ${newIsDarkTheme ? 'dark' : 'light'}`);
-
-        // Instead of recreating the webview, just send a message to update colors
+        // Instead of recreating the webview, just send a message to update theme
         currentPanel.webview.postMessage({
           command: 'updateTheme',
           isDarkTheme: newIsDarkTheme
@@ -1216,46 +1413,118 @@ function showGraphWebview(context: vscode.ExtensionContext, jsonContent: string,
                 // Find CLI path
                 const cliPath = await findRescriptDepCLI(context);
 
-                // Define CLI arguments
-                const args: string[] = ['--format=json'];
+                // Define CLI arguments - Use DOT format for better performance
+                const args: string[] = ['--format=dot'];
 
-                // Add module focus if specified
-                if (moduleName) {
-                  args.push('--module', moduleName);
-                }
+                // Add module focus
+                args.push('--module', moduleName);
 
                 // Add bsDir target
                 args.push(bsDir);
 
-                // Get JSON format data
-                const jsonContent = await runRescriptDep(cliPath, args, context);
+                // Get DOT format data
+                const dotContent = await runRescriptDep(cliPath, args, context);
 
                 if (token.isCancellationRequested) { return; }
 
-                if (jsonContent && currentPanel) { // Check panel existence again
-                  // Parse data to update title correctly
-                  let panelTitle = 'ReScript Dependencies';
-                  try {
-                    const parsedData = JSON.parse(jsonContent);
-                    const foundModule = parsedData.modules?.find((m: ModuleNode) => m.name === moduleName);
-                    if (foundModule) {
-                      panelTitle = `Module: ${moduleName} Dependencies`;
-                    } else {
-                      console.warn(`Focused module ${moduleName} not found in CLI response for title update.`);
-                    }
-                  } catch (e) {
-                    console.error("Error parsing JSON for title update:", e);
-                  }
-                  currentPanel.title = panelTitle;
+                if (dotContent && currentPanel) { // Check panel existence again
+                  // Detect if the current theme is dark
+                  const isDarkTheme = vscode.window.activeColorTheme && vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark;
 
-                  const currentIsDarkTheme = vscode.window.activeColorTheme?.kind === vscode.ColorThemeKind.Dark;
+                  // 테마 스타일 설정
+                  const themeAttributes = isDarkTheme ?
+                    'bgcolor="transparent" fontcolor="#e0e0e0"' :
+                    'bgcolor="transparent" fontcolor="#333333"';
+
+                  const nodeStyle = isDarkTheme ?
+                    'node[shape=box, fontname="sans-serif", style="filled", fillcolor="#1e1e1e", margin="0.3,0.2", color="#aaaaaa", penwidth=1]' :
+                    'node[shape=box, fontname="sans-serif", style="filled", fillcolor="#f0f0f0", margin="0.3,0.2", color="#666666", penwidth=1]';
+
+                  const edgeStyle = isDarkTheme ?
+                    'edge[color="#555555", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]' :
+                    'edge[color="#cccccc", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]';
+
+                  // Update DOT content - node 스타일을 직접 적용
+                  let themedDotContent = dotContent;
+
+                  // 기본 속성 설정
+                  themedDotContent = themedDotContent.replace(/^(digraph\s+\w+\s*\{)/m,
+                    `$1\n  ${themeAttributes}\n  ${nodeStyle}\n  ${edgeStyle}\n  splines=true\n  overlap=false\n  sep="+10"`);
+
+                  // 노드 스타일을 강제로 적용
+                  if (isDarkTheme) {
+                    themedDotContent = themedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#1e1e1e", ');
+                  } else {
+                    themedDotContent = themedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#f0f0f0", ');
+                  }
+
+                  // 포커스 모드에서 중앙 모듈 및 엣지 스타일 처리
+                  // 중앙 모듈의 노드 스타일 변경
+                  const centerNodePattern = new RegExp(`\\s+(${moduleName})\\s*\\[`);
+                  themedDotContent = themedDotContent.replace(centerNodePattern, ` $1 [style="filled", fillcolor="lightgreen", `);
+
+                  // 엣지 색상 변경
+                  const lines = themedDotContent.split('\n');
+                  const coloredLines = lines.map(line => {
+                    // 엣지 라인 패턴 매칭
+                    if (line.includes('->') && !line.includes('//')) {
+                      const trimmed = line.trim();
+
+                      // source -> target 패턴 찾기
+                      const parts = trimmed.split('->');
+                      if (parts.length === 2) {
+                        const source = parts[0].trim();
+                        let target = parts[1].trim();
+
+                        // 순수 타겟 이름 추출
+                        const targetName = target.split(/[\[\s;]/)[0].trim();
+
+                        // 속성 여부 확인
+                        const hasAttributes = target.includes('[');
+
+                        // 1. dependents -> center (중앙 모듈로 들어오는 화살표)
+                        if (targetName === moduleName) {
+                          if (hasAttributes) {
+                            // 기존 속성에 색상 추가 - 다크 테마일 때 더 어두운 색상 사용
+                            const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
+                            return line.replace(/\[([^\]]*)\]/, `[color="${arrowColor}", penwidth=1.5, $1]`);
+                          } else {
+                            // 새 속성 추가 - 다크 테마일 때 더 어두운 색상 사용
+                            const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
+                            return line.replace(/;/, ` [color="${arrowColor}", penwidth=1.5];`);
+                          }
+                        }
+                        // 2. center -> dependencies (중앙 모듈에서 나가는 화살표)
+                        else if (source === moduleName) {
+                          if (hasAttributes) {
+                            // 기존 속성에 색상 추가 - 다크 테마일 때 더 어두운 색상 사용
+                            const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
+                            return line.replace(/\[([^\]]*)\]/, `[color="${arrowColor}", penwidth=1.5, $1]`);
+                          } else {
+                            // 새 속성 추가 - 다크 테마일 때 더 어두운 색상 사용
+                            const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
+                            return line.replace(/;/, ` [color="${arrowColor}", penwidth=1.5];`);
+                          }
+                        }
+                      }
+                    }
+                    return line;
+                  });
+
+                  themedDotContent = coloredLines.join('\n');
+
+                  // Update panel title
+                  currentPanel.title = `Module: ${moduleName} Dependencies`;
+
+                  // Send message to update the graph
                   currentPanel.webview.postMessage({
                     command: 'updateGraph',
-                    jsonContent: jsonContent,
-                    focusedModule: moduleName,
-                    isDarkTheme: currentIsDarkTheme
+                    dotContent: themedDotContent,
+                    isFocusedMode: true,
+                    centerModule: moduleName,
+                    isDarkTheme: isDarkTheme
                   });
-                } else if (!jsonContent) {
+                } else if (!dotContent) {
                   vscode.window.showErrorMessage(`Failed to generate dependency data for ${moduleName}`);
                 } else {
                   console.warn("Panel closed before focusModule update could be sent.");
