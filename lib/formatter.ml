@@ -79,8 +79,11 @@ and output_dot graph out_channel =
       List.iter (fun dep -> Hashtbl.replace all_modules_set dep true) deps)
     modules;
 
-  (* Convert set to list *)
-  let all_modules = Hashtbl.fold (fun k _ acc -> k :: acc) all_modules_set [] in
+  (* Convert set to list and sort alphabetically *)
+  let all_modules =
+    Hashtbl.fold (fun k _ acc -> k :: acc) all_modules_set []
+    |> List.sort String.compare
+  in
 
   (* Output nodes with metadata *)
   List.iter
@@ -106,16 +109,21 @@ and output_dot graph out_channel =
 
   output_string out_channel "\n";
 
+  (* Sort modules alphabetically before outputting edges *)
+  let sorted_modules = List.sort String.compare modules in
+
   (* Output edges *)
   List.iter
     (fun module_name ->
       let deps = Dependency_graph.get_dependencies graph module_name in
+      (* Sort dependencies alphabetically as well *)
+      let sorted_deps = List.sort String.compare deps in
       List.iter
         (fun dep ->
           output_string out_channel
             ("  \"" ^ module_name ^ "\" -> \"" ^ dep ^ "\";\n"))
-        deps)
-    modules;
+        sorted_deps)
+    sorted_modules;
 
   (* Find cycles and highlight them *)
   let sccs = Dependency_graph.find_strongly_connected_components graph in
@@ -129,9 +137,11 @@ and output_dot graph out_channel =
           output_string out_channel "    style=filled;\n";
           output_string out_channel "    color=pink;\n";
           output_string out_channel "    label=\"Cyclic dependency\";\n";
+          (* Sort modules in the cycle alphabetically *)
+          let sorted_scc = List.sort String.compare scc in
           List.iter
             (fun m -> output_string out_channel ("    \"" ^ m ^ "\";\n"))
-            scc;
+            sorted_scc;
           output_string out_channel "  }\n"))
       sccs);
 
