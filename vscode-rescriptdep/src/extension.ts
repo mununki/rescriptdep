@@ -634,6 +634,14 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             user-select: none;
         }
         
+        body.vscode-dark {
+            background-color: var(--vscode-editor-background, #1e1e1e) !important;
+        }
+        
+        body.vscode-light {
+            background-color: var(--vscode-editor-background, #ffffff) !important;
+        }
+        
         #graph-container {
             width: 100%;
             height: calc(100vh - 60px);
@@ -643,6 +651,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             align-items: center;
             position: relative;
             user-select: none;
+            background-color: transparent;
         }
         
         #graph {
@@ -705,6 +714,51 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             margin-right: 5px;
         }
         
+        /* Define colors for arrows that match the legend */
+        :root {
+            /* These variables will be assigned at runtime based on theme */
+            --dependents-color: lightblue;
+            --dependencies-color: lightcoral;
+        }
+        
+        /* Dark theme arrow colors */
+        body.vscode-dark .edge.dependent-edge path {
+            stroke: var(--dependents-color, steelblue) !important;
+        }
+        
+        body.vscode-dark .edge.dependent-edge polygon {
+            fill: var(--dependents-color, steelblue) !important;
+            stroke: var(--dependents-color, steelblue) !important;
+        }
+        
+        body.vscode-dark .edge.dependency-edge path {
+            stroke: var(--dependencies-color, indianred) !important;
+        }
+        
+        body.vscode-dark .edge.dependency-edge polygon {
+            fill: var(--dependencies-color, indianred) !important;
+            stroke: var(--dependencies-color, indianred) !important;
+        }
+        
+        /* Light theme arrow colors */
+        body.vscode-light .edge.dependent-edge path {
+            stroke: var(--dependents-color, lightblue) !important;
+        }
+        
+        body.vscode-light .edge.dependent-edge polygon {
+            fill: var(--dependents-color, lightblue) !important;
+            stroke: var(--dependents-color, lightblue) !important;
+        }
+        
+        body.vscode-light .edge.dependency-edge path {
+            stroke: var(--dependencies-color, lightcoral) !important;
+        }
+        
+        body.vscode-light .edge.dependency-edge polygon {
+            fill: var(--dependencies-color, lightcoral) !important;
+            stroke: var(--dependencies-color, lightcoral) !important;
+        }
+        
         /* Error message container */
         #error-container {
             position: absolute;
@@ -731,17 +785,62 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             margin-top: 10px;
             font-size: 0.9em;
         }
+        
+        /* SVG 스타일 직접 지정 */
+        svg {
+            background-color: transparent !important;
+        }
+        
+        /* 다크 테마일 때 SVG 내부 요소들의 스타일 */
+        body.vscode-dark svg .node rect,
+        body.vscode-dark svg .node polygon {
+            fill: #1e1e1e !important;
+            stroke: #aaaaaa !important;
+        }
+        
+        body.vscode-dark svg .node text {
+            fill: #cccccc !important;
+        }
+        
+        body.vscode-dark svg .edge path {
+            stroke: #555555 !important;
+        }
+        
+        body.vscode-dark svg .edge polygon {
+            fill: #555555 !important;
+            stroke: #555555 !important;
+        }
+        
+        /* 라이트 테마일 때 SVG 내부 요소들의 스타일 */
+        body.vscode-light svg .node rect,
+        body.vscode-light svg .node polygon {
+            fill: #f0f0f0 !important;
+            stroke: #666666 !important;
+        }
+        
+        body.vscode-light svg .node text {
+            fill: #333333 !important;
+        }
+        
+        body.vscode-light svg .edge path {
+            stroke: #cccccc !important;
+        }
+        
+        body.vscode-light svg .edge polygon {
+            fill: #cccccc !important;
+            stroke: #cccccc !important;
+        }
     </style>
 </head>
-<body>
+<body class="${isDarkTheme ? 'vscode-dark' : 'vscode-light'}">
     <div class="legend">
         <div class="legend-item">
             <div class="legend-line" style="background-color: var(--dependents-color, lightblue);"></div>
-            <span>Dependents (uses center module)</span>
+            <span>Dependents (modules that use the center module)</span>
         </div>
         <div class="legend-item">
             <div class="legend-line" style="background-color: var(--dependencies-color, lightcoral);"></div>
-            <span>Dependencies (used by center module)</span>
+            <span>Dependencies (modules used by the center module)</span>
         </div>
     </div>
     <div id="graph-container">
@@ -772,12 +871,117 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         let isFocusedMode = false;
         let centerModule = null;
         
-        // 테마 관련 변수
-        const isDarkTheme = document.body.classList.contains('vscode-dark');
+        // 테마 관련 변수 - 초기화 시 body 클래스에서 테마 감지
+        let isDarkTheme = document.body.classList.contains('vscode-dark');
         
         // 테마에 따른 색상 설정
         document.documentElement.style.setProperty('--dependents-color', isDarkTheme ? 'steelblue' : 'lightblue');
         document.documentElement.style.setProperty('--dependencies-color', isDarkTheme ? 'indianred' : 'lightcoral');
+        
+        // SVG 요소의 스타일을 테마에 맞게 업데이트하는 함수
+        function updateSvgStylesForTheme(svg, isDark) {
+            if (!svg) return;
+            
+            // SVG 배경색 설정
+            svg.style.backgroundColor = 'transparent';
+            
+            // 노드 스타일 업데이트
+            const nodeRects = svg.querySelectorAll('.node rect, .node polygon');
+            const bgColor = isDark ? '#1e1e1e' : '#f0f0f0';
+            nodeRects.forEach(rect => {
+                rect.setAttribute('fill', bgColor);
+                rect.setAttribute('stroke', isDark ? '#aaaaaa' : '#666666');
+                rect.setAttribute('stroke-width', '1px');
+                // 둥근 모서리 추가
+                if (rect.tagName.toLowerCase() === 'rect') {
+                    rect.setAttribute('rx', '4');
+                    rect.setAttribute('ry', '4');
+                }
+            });
+            
+            // 텍스트 색상 업데이트
+            const nodeTexts = svg.querySelectorAll('.node text');
+            nodeTexts.forEach(text => {
+                text.setAttribute('fill', isDark ? '#cccccc' : '#333333');
+            });
+            
+            // 엣지 색상 업데이트
+            const edgePaths = svg.querySelectorAll('.edge path');
+            const arrowColor = isDark ? '#555555' : '#cccccc';
+            edgePaths.forEach(path => {
+                path.setAttribute('stroke', arrowColor);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke-width', '1.2');
+            });
+            
+            const arrowHeads = svg.querySelectorAll('.edge polygon');
+            arrowHeads.forEach(head => {
+                head.setAttribute('fill', arrowColor);
+                head.setAttribute('stroke', arrowColor);
+            });
+            
+            // 포커스 모드 관련 스타일 업데이트
+            if (isFocusedMode && centerModule) {
+                updateFocusedModuleStyles(svg, isDark);
+            }
+        }
+        
+        // Function to update styles for focused module
+        function updateFocusedModuleStyles(svg, isDark) {
+            if (!svg || !centerModule) return;
+            
+            const edges = svg.querySelectorAll('.edge');
+            edges.forEach(edge => {
+                const titleEl = edge.querySelector('title');
+                if (titleEl && titleEl.textContent) {
+                    const titleText = titleEl.textContent;
+                    const parts = titleText.split('->');
+                    if (parts.length === 2) {
+                        const target = parts[1].trim();
+                        const source = parts[0].trim();
+                        
+                        // 1. Dependents -> Center direction (arrows coming into center)
+                        if (target === centerModule) {
+                            // Add dependent-edge class for CSS targeting
+                            edge.classList.add('dependent-edge');
+                            
+                            const paths = edge.querySelectorAll('path');
+                            const polygons = edge.querySelectorAll('polygon');
+                            const arrowColor = isDark ? 'steelblue' : 'lightblue';
+                            
+                            paths.forEach(path => {
+                                path.setAttribute('stroke', arrowColor);
+                                path.setAttribute('stroke-width', '1.5');
+                            });
+                            
+                            polygons.forEach(polygon => {
+                                polygon.setAttribute('fill', arrowColor);
+                                polygon.setAttribute('stroke', arrowColor);
+                            });
+                        }
+                        // 2. Center -> Dependencies direction (arrows going out from center)
+                        else if (source === centerModule) {
+                            // Add dependency-edge class for CSS targeting
+                            edge.classList.add('dependency-edge');
+                            
+                            const paths = edge.querySelectorAll('path');
+                            const polygons = edge.querySelectorAll('polygon');
+                            const arrowColor = isDark ? 'indianred' : 'lightcoral';
+                            
+                            paths.forEach(path => {
+                                path.setAttribute('stroke', arrowColor);
+                                path.setAttribute('stroke-width', '1.5');
+                            });
+                            
+                            polygons.forEach(polygon => {
+                                polygon.setAttribute('fill', arrowColor);
+                                polygon.setAttribute('stroke', arrowColor);
+                            });
+                        }
+                    }
+                }
+            });
+        }
         
         // Function to show error with better UI
         function showErrorMessage(error) {
@@ -814,6 +1018,22 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             if (!dotSrc) {
                 console.log('No DOT data yet');
                 return;
+            }
+            
+            // 현재 테마 상태 다시 확인 (테마 변경 시 정확하게 적용하기 위함)
+            isDarkTheme = document.body.classList.contains('vscode-dark');
+            
+            // 테마에 따른 색상 설정 업데이트
+            document.documentElement.style.setProperty('--dependents-color', isDarkTheme ? 'steelblue' : 'lightblue');
+            document.documentElement.style.setProperty('--dependencies-color', isDarkTheme ? 'indianred' : 'lightcoral');
+            
+            // body 배경색 직접 설정
+            document.body.style.backgroundColor = isDarkTheme ? '#1e1e1e' : '#ffffff';
+            
+            // 그래프 컨테이너 배경색 설정
+            const graphContainer = document.getElementById('graph-container');
+            if (graphContainer) {
+                graphContainer.style.backgroundColor = 'transparent';
             }
         
             const viz = new Viz();
@@ -876,12 +1096,33 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                         }
                     });
                     
-                    // 다크 모드일 때 텍스트 색상 변경
+                    // 텍스트 색상 변경
+                    const nodeTexts = svgElement.querySelectorAll('.node text');
                     if (isDarkTheme) {
-                        const nodeTexts = svgElement.querySelectorAll('.node text');
                         nodeTexts.forEach(text => {
                             text.setAttribute('fill', '#cccccc'); // 옅은 회색으로 변경
                         });
+                    } else {
+                        nodeTexts.forEach(text => {
+                            text.setAttribute('fill', '#333333'); // 어두운 회색으로 변경
+                        });
+                    }
+                    
+                    // SVG 배경색 설정 - 최상위 g 요소의 배경색 설정
+                    const rootG = svgElement.querySelector('g');
+                    if (rootG) {
+                        // SVG에서 transparent 배경 사용하고 컨테이너 배경색 사용
+                        rootG.style.backgroundColor = 'transparent';
+                    }
+                    
+                    // SVG의 background 설정 (전체 SVG 영역)
+                    svgElement.style.backgroundColor = 'transparent';
+                    
+                    // document와 container 배경색 업데이트
+                    document.body.style.backgroundColor = isDarkTheme ? '#1e1e1e' : '#ffffff';
+                    const graphContainer = document.getElementById('graph-container');
+                    if (graphContainer) {
+                        graphContainer.style.backgroundColor = 'transparent';
                     }
                     
                     // 화살표 스타일 수정 - 테두리와 배경색 동일하게 설정
@@ -922,12 +1163,15 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                                         const target = parts[1].trim();
                                         const source = parts[0].trim();
                                         
-                                        // 1. Dependents -> Center 방향
+                                        // 1. Dependents -> Center direction (arrows coming into center)
                                         if (target === centerModule) {
+                                            // Add class for CSS styling
+                                            edge.classList.add('dependent-edge');
+                                            
                                             const paths = edge.querySelectorAll('path');
                                             const polygons = edge.querySelectorAll('polygon');
                                             
-                                            // 다크 테마일 때 더 어두운 색상 사용
+                                            // Use colors that match the legend
                                             const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
                                             
                                             paths.forEach(path => {
@@ -940,12 +1184,15 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                                                 polygon.setAttribute('stroke', arrowColor);
                                             });
                                         }
-                                        // 2. Center -> Dependencies 방향
+                                        // 2. Center -> Dependencies direction (arrows going out from center)
                                         else if (source === centerModule) {
+                                            // Add class for CSS styling
+                                            edge.classList.add('dependency-edge');
+                                            
                                             const paths = edge.querySelectorAll('path');
                                             const polygons = edge.querySelectorAll('polygon');
                                             
-                                            // 다크 테마일 때 더 어두운 색상 사용
+                                            // Use colors that match the legend
                                             const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
                                             
                                             paths.forEach(path => {
@@ -1312,14 +1559,39 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 isFocusedMode = message.isFocusedMode;
                 centerModule = message.centerModule;
                 
+                // 현재 테마 상태 업데이트
+                isDarkTheme = message.isDarkTheme;
+                
                 // Apply theme changes
                 document.documentElement.style.setProperty('--dependents-color', 
-                    message.isDarkTheme ? 'steelblue' : 'lightblue');
+                    isDarkTheme ? 'steelblue' : 'lightblue');
                 document.documentElement.style.setProperty('--dependencies-color', 
-                    message.isDarkTheme ? 'indianred' : 'lightcoral');
+                    isDarkTheme ? 'indianred' : 'lightcoral');
                 
-                // Re-render with new theme
-                renderGraph();
+                // document의 클래스를 테마에 맞게 업데이트
+                if (isDarkTheme) {
+                    document.body.classList.add('vscode-dark');
+                    document.body.classList.remove('vscode-light');
+                    document.body.style.backgroundColor = '#1e1e1e';  // 직접 배경색 설정
+                } else {
+                    document.body.classList.add('vscode-light');
+                    document.body.classList.remove('vscode-dark');
+                    document.body.style.backgroundColor = '#ffffff';  // 직접 배경색 설정
+                }
+                
+                // 그래프 컨테이너 배경색 설정
+                const graphContainer = document.getElementById('graph-container');
+                if (graphContainer) {
+                    graphContainer.style.backgroundColor = 'transparent';
+                }
+                
+                // 기존 SVG 요소가 있으면 직접 업데이트
+                if (svgElement) {
+                    updateSvgStylesForTheme(svgElement, isDarkTheme);
+                } else {
+                    // SVG가 없는 경우 렌더링 다시 시도
+                    renderGraph();
+                }
             } else if (message.command === 'showError') {
                 // Display an error message without rendering graph
                 showErrorMessage({ message: message.errorMessage });
@@ -1392,11 +1664,40 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
   context.subscriptions.push(
     vscode.window.onDidChangeActiveColorTheme(theme => {
       const newIsDarkTheme = theme.kind === vscode.ColorThemeKind.Dark;
-      if (newIsDarkTheme !== isDarkTheme && currentPanel && currentDotContent) {
+      if (currentPanel && currentDotContent) {
+        // 테마에 맞게 DOT 내용 다시 생성
+        let updatedDotContent = currentDotContent;
+
+        // 테마에 맞는 그래프 속성 설정
+        const themeAttributes = newIsDarkTheme ?
+          'bgcolor="transparent" fontcolor="#e0e0e0"' :
+          'bgcolor="transparent" fontcolor="#333333"';
+
+        // 노드 스타일 설정
+        const nodeStyle = newIsDarkTheme ?
+          'node[shape=box, fontname="sans-serif", style="filled", fillcolor="#1e1e1e", margin="0.3,0.2", color="#aaaaaa", penwidth=1]' :
+          'node[shape=box, fontname="sans-serif", style="filled", fillcolor="#f0f0f0", margin="0.3,0.2", color="#666666", penwidth=1]';
+
+        // 엣지 스타일 설정
+        const edgeStyle = newIsDarkTheme ?
+          'edge[color="#555555", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]' :
+          'edge[color="#cccccc", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]';
+
+        // 기본 속성 설정
+        updatedDotContent = updatedDotContent.replace(/^(digraph\s+\w+\s*\{)/m,
+          `$1\n  ${themeAttributes}\n  ${nodeStyle}\n  ${edgeStyle}\n  splines=true\n  overlap=false\n  sep="+10"`);
+
+        // 노드 스타일 강제 적용
+        if (newIsDarkTheme) {
+          updatedDotContent = updatedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#1e1e1e", ');
+        } else {
+          updatedDotContent = updatedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#f0f0f0", ');
+        }
+
         // 웹뷰에 테마 변경 명령 전송 - 페이지 리로드 대신 그래프 재렌더링
         currentPanel.webview.postMessage({
           command: 'updateTheme',
-          dotContent: currentDotContent,
+          dotContent: updatedDotContent,
           isFocusedMode: currentIsFocusedMode,
           centerModule: currentCenterModule,
           isDarkTheme: newIsDarkTheme
