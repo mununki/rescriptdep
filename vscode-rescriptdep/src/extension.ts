@@ -620,7 +620,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
     <script src="https://unpkg.com/viz.js@2.1.2/viz.js"></script>
     <script src="https://unpkg.com/viz.js@2.1.2/full.render.js"></script>
     <style>
-        /* 기본 스타일만 유지 */
+        /* Only keep basic styles */
         body {
             margin: 0;
             padding: 10px;
@@ -693,7 +693,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             gap: 5px;
         }
 
-        /* 레전드 스타일 - 라인으로 변경 */
+        /* Legend styles - changed to lines */
         .legend {
             display: flex;
             justify-content: center;
@@ -786,12 +786,12 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             font-size: 0.9em;
         }
         
-        /* SVG 스타일 직접 지정 */
+        /* Directly specify SVG styles */
         svg {
             background-color: transparent !important;
         }
         
-        /* 다크 테마일 때 SVG 내부 요소들의 스타일 */
+        /* SVG element styles for dark theme */
         body.vscode-dark svg .node rect,
         body.vscode-dark svg .node polygon {
             fill: #1e1e1e !important;
@@ -811,7 +811,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             stroke: #555555 !important;
         }
         
-        /* 라이트 테마일 때 SVG 내부 요소들의 스타일 */
+        /* SVG element styles for light theme */
         body.vscode-light svg .node rect,
         body.vscode-light svg .node polygon {
             fill: #f0f0f0 !important;
@@ -854,13 +854,13 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
     <script>
         const vscode = acquireVsCodeApi();
         let svgElement;
-        // 줌 관련 변수
+        // Zoom-related variables
         let currentZoom = 1;
         const MIN_ZOOM = 0.1;
         const MAX_ZOOM = 5;
         const ZOOM_SPEED = 0.1;
         
-        // 드래그 관련 변수
+        // Drag-related variables
         let isDragging = false;
         let lastX = 0;
         let lastY = 0;
@@ -871,41 +871,41 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         let isFocusedMode = false;
         let centerModule = null;
         
-        // 테마 관련 변수 - 초기화 시 body 클래스에서 테마 감지
+        // Theme-related variables - detect theme from body class during initialization
         let isDarkTheme = document.body.classList.contains('vscode-dark');
         
-        // 테마에 따른 색상 설정
+        // Set colors based on theme
         document.documentElement.style.setProperty('--dependents-color', isDarkTheme ? 'steelblue' : 'lightblue');
         document.documentElement.style.setProperty('--dependencies-color', isDarkTheme ? 'indianred' : 'lightcoral');
         
-        // SVG 요소의 스타일을 테마에 맞게 업데이트하는 함수
+        // Function to update SVG styles to match the theme
         function updateSvgStylesForTheme(svg, isDark) {
             if (!svg) return;
             
-            // SVG 배경색 설정
+            // Set SVG background color
             svg.style.backgroundColor = 'transparent';
             
-            // 노드 스타일 업데이트
+            // Update node styles
             const nodeRects = svg.querySelectorAll('.node rect, .node polygon');
             const bgColor = isDark ? '#1e1e1e' : '#f0f0f0';
             nodeRects.forEach(rect => {
                 rect.setAttribute('fill', bgColor);
                 rect.setAttribute('stroke', isDark ? '#aaaaaa' : '#666666');
                 rect.setAttribute('stroke-width', '1px');
-                // 둥근 모서리 추가
+                // Add rounded corners
                 if (rect.tagName.toLowerCase() === 'rect') {
                     rect.setAttribute('rx', '4');
                     rect.setAttribute('ry', '4');
                 }
             });
             
-            // 텍스트 색상 업데이트
+            // Update text colors
             const nodeTexts = svg.querySelectorAll('.node text');
             nodeTexts.forEach(text => {
                 text.setAttribute('fill', isDark ? '#cccccc' : '#333333');
             });
             
-            // 엣지 색상 업데이트
+            // Update edge colors
             const edgePaths = svg.querySelectorAll('.edge path');
             const arrowColor = isDark ? '#555555' : '#cccccc';
             edgePaths.forEach(path => {
@@ -920,7 +920,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 head.setAttribute('stroke', arrowColor);
             });
             
-            // 포커스 모드 관련 스타일 업데이트
+            // Update focused module styles
             if (isFocusedMode && centerModule) {
                 updateFocusedModuleStyles(svg, isDark);
             }
@@ -1020,17 +1020,17 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 return;
             }
             
-            // 현재 테마 상태 다시 확인 (테마 변경 시 정확하게 적용하기 위함)
+            // Check current theme state again (for accurate application when theme changes)
             isDarkTheme = document.body.classList.contains('vscode-dark');
             
-            // 테마에 따른 색상 설정 업데이트
+            // Update theme-based color settings
             document.documentElement.style.setProperty('--dependents-color', isDarkTheme ? 'steelblue' : 'lightblue');
             document.documentElement.style.setProperty('--dependencies-color', isDarkTheme ? 'indianred' : 'lightcoral');
             
-            // body 배경색 직접 설정
+            // Directly set body background color
             document.body.style.backgroundColor = isDarkTheme ? '#1e1e1e' : '#ffffff';
             
-            // 그래프 컨테이너 배경색 설정
+            // Set graph container background color
             const graphContainer = document.getElementById('graph-container');
             if (graphContainer) {
                 graphContainer.style.backgroundColor = 'transparent';
@@ -1061,12 +1061,12 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                     container.appendChild(element);
                     svgElement = element;
                     
-                    // SVG 요소에 선택 방지 스타일 추가
+                    // Add selection prevention styles to SVG element
                     svgElement.style.userSelect = 'none';
                     svgElement.style.webkitUserSelect = 'none';
                     svgElement.style.msUserSelect = 'none';
                     
-                    // SVG 내부의 모든 요소에 선택 방지 적용
+                    // Apply selection prevention to all elements in SVG
                     const allSvgElements = svgElement.querySelectorAll('*');
                     allSvgElements.forEach(el => {
                         el.style.userSelect = 'none';
@@ -1074,94 +1074,94 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                         el.style.msUserSelect = 'none';
                     });
                     
-                    // 테마 감지 및 클래스 추가
+                    // Detect theme and add class
                     const isDarkTheme = document.body.classList.contains('vscode-dark');
                     if (isDarkTheme) {
                         document.body.classList.add('dark-theme');
                     }
                     
-                    // SVG 직접 수정 - 모든 노드 배경색 변경
+                    // Direct SVG modification - change all node background colors
                     const nodeRects = svgElement.querySelectorAll('.node rect, .node polygon');
                     const bgColor = isDarkTheme ? '#1e1e1e' : '#f0f0f0';
                     
                     nodeRects.forEach(rect => {
                         rect.setAttribute('fill', bgColor);
-                        // 테두리도 확실히 설정
+                        // Also set border clearly
                         rect.setAttribute('stroke', isDarkTheme ? '#aaaaaa' : '#666666');
                         rect.setAttribute('stroke-width', '1px');
-                        // 둥근 모서리 추가
+                        // Add rounded corners
                         if (rect.tagName.toLowerCase() === 'rect') {
                             rect.setAttribute('rx', '4');
                             rect.setAttribute('ry', '4');
                         }
                     });
                     
-                    // 텍스트 색상 변경
+                    // Change text colors
                     const nodeTexts = svgElement.querySelectorAll('.node text');
                     if (isDarkTheme) {
                         nodeTexts.forEach(text => {
-                            text.setAttribute('fill', '#cccccc'); // 옅은 회색으로 변경
+                            text.setAttribute('fill', '#cccccc'); // Light gray
                         });
                     } else {
                         nodeTexts.forEach(text => {
-                            text.setAttribute('fill', '#333333'); // 어두운 회색으로 변경
+                            text.setAttribute('fill', '#333333'); // Dark gray
                         });
                     }
                     
-                    // SVG 배경색 설정 - 최상위 g 요소의 배경색 설정
+                    // Set SVG background color - set background color for the top-level g element
                     const rootG = svgElement.querySelector('g');
                     if (rootG) {
-                        // SVG에서 transparent 배경 사용하고 컨테이너 배경색 사용
+                        // Use transparent background in SVG and container background color
                         rootG.style.backgroundColor = 'transparent';
                     }
                     
-                    // SVG의 background 설정 (전체 SVG 영역)
+                    // Set background for SVG (entire SVG area)
                     svgElement.style.backgroundColor = 'transparent';
                     
-                    // document와 container 배경색 업데이트
+                    // Update document and container background colors
                     document.body.style.backgroundColor = isDarkTheme ? '#1e1e1e' : '#ffffff';
                     const graphContainer = document.getElementById('graph-container');
                     if (graphContainer) {
                         graphContainer.style.backgroundColor = 'transparent';
                     }
                     
-                    // 화살표 스타일 수정 - 테두리와 배경색 동일하게 설정
+                    // Modify arrow styles - set border and background color identically
                     const edgePaths = svgElement.querySelectorAll('.edge path');
                     const arrowColor = isDarkTheme ? '#555555' : '#cccccc';
                     edgePaths.forEach(path => {
                         path.setAttribute('stroke', arrowColor);
-                        // fill은 화살표 헤드에만 영향을 주도록 설정
+                        // Set fill to none so it only affects arrow heads
                         path.setAttribute('fill', 'none');
                         path.setAttribute('stroke-width', '1.2');
                     });
                     
-                    // 화살표 헤드 스타일 조정
+                    // Adjust arrow head styles
                     const arrowHeads = svgElement.querySelectorAll('.edge polygon');
                     arrowHeads.forEach(head => {
                         head.setAttribute('fill', arrowColor);
                         head.setAttribute('stroke', arrowColor);
                     });
                     
-                    // 포커스 모드일 때 중앙 모듈 관련 엣지 색상 처리
+                    // Handle edge colors for center module in focus mode
                     if (isFocusedMode && centerModule) {
-                        // 중앙 모듈 노드 식별 (title 텍스트가 중앙 모듈명과 일치)
+                        // Identify center module node (title text matches center module name)
                         const centerNode = Array.from(svgElement.querySelectorAll('.node')).find(node => {
                             const titleEl = node.querySelector('title');
                             return titleEl && titleEl.textContent === centerModule;
                         });
                         
                         if (centerNode) {
-                            // 중앙 모듈로 들어오는 화살표 처리 (Dependents)
+                            // Process arrows coming into the center module (Dependents)
                             const edgesTo = svgElement.querySelectorAll('.edge');
                             edgesTo.forEach(edge => {
                                 const titleEl = edge.querySelector('title');
                                 if (titleEl && titleEl.textContent) {
                                     const titleText = titleEl.textContent;
-                                    // 화살표 타이틀은 보통 "source->target" 형식
+                                    // Arrow titles typically in "source->target" format
                                     const parts = titleText.split('->');
                                     if (parts.length === 2) {
-                                        const target = parts[1].trim();
                                         const source = parts[0].trim();
+                                        const target = parts[1].trim();
                                         
                                         // 1. Dependents -> Center direction (arrows coming into center)
                                         if (target === centerModule) {
@@ -1210,11 +1210,11 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                             });
                         }
                     } else {
-                        // 전체 모드에서 색상 구분 - dependencies(나가는 화살표)와 dependents(들어오는 화살표) 구분
+                        // Distinguish colors in full mode - dependencies (outgoing arrows) and dependents (incoming arrows)
                         const edges = svgElement.querySelectorAll('.edge');
                         const visitedNodes = new Set();
                         
-                        // 첫 번째 패스: 모든 노드 이름 수집
+                        // First pass: collect all node names
                         edges.forEach(edge => {
                             const titleEl = edge.querySelector('title');
                             if (titleEl && titleEl.textContent) {
@@ -1229,7 +1229,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                             }
                         });
                         
-                        // 두 번째 패스: 모든 엣지 색상 수정
+                        // Second pass: modify all edge colors
                         edges.forEach(edge => {
                             const titleEl = edge.querySelector('title');
                             if (titleEl && titleEl.textContent) {
@@ -1239,11 +1239,11 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                                     const source = parts[0].trim();
                                     const target = parts[1].trim();
                                     
-                                    // 나가는 화살표는 dependencies 색상
+                                    // Outgoing arrows use dependencies color
                                     const paths = edge.querySelectorAll('path');
                                     const polygons = edge.querySelectorAll('polygon');
                                     
-                                    // 다크 테마일 때 더 어두운 색상
+                                    // Darker color for dark theme
                                     const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
                                     
                                     paths.forEach(path => {
@@ -1260,7 +1260,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                         });
                     }
                     
-                    // 초기 viewBox 설정
+                    // Initial viewBox setup
                     const bbox = svgElement.getBBox();
                     viewBox = {
                         x: bbox.x,
@@ -1271,14 +1271,14 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                     svgElement.setAttribute('width', '100%');
                     svgElement.setAttribute('height', '100%');
                     
-                    // SVG 요소에 스타일 추가하여 전체 영역을 채우도록 함
+                    // Add styles to SVG element to fill the entire area
                     svgElement.style.display = 'block';
                     svgElement.style.width = '100%';
                     svgElement.style.height = '100%';
                     svgElement.style.margin = '0';
                     svgElement.style.padding = '0';
                     
-                    // preserveAspectRatio 속성 설정하여 화면에 맞게 확장
+                    // Set preserveAspectRatio attribute to fit to screen
                     svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
                     
                     updateViewBox();
@@ -1289,10 +1289,10 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                     // Setup dragging
                     setupDragHandlers();
                     
-                    // 화면에 맞게 초기 뷰 조정
+                    // Adjust initial view to fit screen
                     fitGraphToContainer();
                     
-                    // 스크롤 줌 설정
+                    // Set up scroll zoom
                     setupScrollZoom();
                 })
                 .catch(error => {
@@ -1303,7 +1303,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         function setupNodeClickHandlers() {
             if (!svgElement) return;
             
-            // 모든 노드 처리
+            // Process all nodes
             const nodes = svgElement.querySelectorAll('.node');
             nodes.forEach(node => {
                 const titleEl = node.querySelector('title');
@@ -1312,19 +1312,19 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 const moduleName = titleEl.textContent.trim();
                 if (!moduleName) return;
                 
-                // 중앙 모듈인지 확인
+                // Check if this is the center module
                 if (centerModule && moduleName === centerModule) {
-                    // 중앙 모듈에는 클릭 방지 스타일만 적용
+                    // Only apply click prevention style to center module
                     node.style.cursor = 'default';
                     
-                    // 클릭 이벤트 무효화
+                    // Disable click event
                     node.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         return false;
                     }, true);
                 } else {
-                    // 일반 모듈에는 클릭 이벤트 추가
+                    // Add click event to regular modules
                     node.style.cursor = 'pointer';
                     node.addEventListener('click', (e) => {
                         e.preventDefault();
@@ -1352,16 +1352,16 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             let lastX = 0;
             let lastY = 0;
             
-            // 마우스 다운 - 드래그 시작
+            // Mouse down - start dragging
             svgElement.addEventListener('mousedown', (e) => {
-                e.preventDefault(); // 텍스트 선택 방지
+                e.preventDefault(); // Prevent text selection
                 isDragging = true;
                 lastX = e.clientX;
                 lastY = e.clientY;
                 svgElement.style.cursor = 'grabbing';
             });
             
-            // 마우스 이동 - 드래그 중
+            // Mouse move - during dragging
             document.addEventListener('mousemove', (e) => {
                 if (!isDragging) return;
                 
@@ -1388,13 +1388,13 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 updateViewBox();
             });
             
-            // 마우스 업 - 드래그 종료
+            // Mouse up - end dragging
             document.addEventListener('mouseup', () => {
                 isDragging = false;
                 svgElement.style.cursor = 'grab';
             });
             
-            // 마우스가 SVG 영역 밖으로 나가도 드래그 종료
+            // End dragging if mouse leaves SVG area
             document.addEventListener('mouseleave', () => {
                 isDragging = false;
                 svgElement.style.cursor = 'grab';
@@ -1405,51 +1405,51 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         }
         
         function setupScrollZoom() {
-            // 마우스 휠 이벤트
+            // Mouse wheel event
             document.getElementById('graph-container').addEventListener('wheel', (e) => {
                 e.preventDefault();
                 
-                // 마우스 위치 가져오기
+                // Get mouse position
                 const svgRect = svgElement.getBoundingClientRect();
                 const mouseX = e.clientX - svgRect.left;
                 const mouseY = e.clientY - svgRect.top;
                 
-                // SVG 내의 상대적 위치 계산 (0~1 범위)
+                // Calculate relative position within SVG (0-1 range)
                 const relativeX = mouseX / svgRect.width;
                 const relativeY = mouseY / svgRect.height;
                 
-                // viewBox 내의 실제 좌표 계산
+                // Calculate actual coordinates in viewBox
                 const pointX = viewBox.x + (viewBox.width * relativeX);
                 const pointY = viewBox.y + (viewBox.height * relativeY);
                 
-                // 줌 인/아웃 (휠 방향에 따라)
+                // Zoom in/out (based on wheel direction)
                 const zoomFactor = e.deltaY > 0 ? (1 - ZOOM_SPEED) : (1 + ZOOM_SPEED);
                 zoomByFactor(zoomFactor, { x: pointX, y: pointY });
             });
             
-            // 더블 클릭 시 확대
+            // Double-click to zoom in
             document.getElementById('graph-container').addEventListener('dblclick', (e) => {
-                e.preventDefault(); // 텍스트 선택 방지
-                // 마우스 위치 가져오기
+                e.preventDefault(); // Prevent text selection
+                // Get mouse position
                 const svgRect = svgElement.getBoundingClientRect();
                 const mouseX = e.clientX - svgRect.left;
                 const mouseY = e.clientY - svgRect.top;
                 
-                // SVG 내의 상대적 위치 계산
+                // Calculate relative position within SVG
                 const relativeX = mouseX / svgRect.width;
                 const relativeY = mouseY / svgRect.height;
                 
-                // viewBox 내의 실제 좌표 계산
+                // Calculate actual coordinates in viewBox
                 const pointX = viewBox.x + (viewBox.width * relativeX);
                 const pointY = viewBox.y + (viewBox.height * relativeY);
                 
-                // 줌 인
+                // Zoom in
                 zoomByFactor(0.7, { x: pointX, y: pointY });
             });
             
-            // 우클릭 시 리셋
+            // Right-click to reset zoom
             document.getElementById('graph-container').addEventListener('contextmenu', (e) => {
-                e.preventDefault(); // 우클릭 메뉴 방지
+                e.preventDefault(); // Prevent context menu
                 resetZoom();
             });
         }
@@ -1457,25 +1457,25 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         function zoomByFactor(factor, point) {
             if (!svgElement) return;
             
-            // 현재 줌 계산
+            // Current zoom calculation
             const oldZoom = currentZoom;
             currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom * factor));
             
-            // 실제 적용할 비율 계산
+            // Calculate actual scaling factor
             const realFactor = currentZoom / oldZoom;
             
-            // 포인트 위치에서의 줌 계산
+            // Calculate zoom at the current pointer position
             const newWidth = viewBox.width / realFactor;
             const newHeight = viewBox.height / realFactor;
             
-            // 마우스 포인터 위치 기준으로 새 좌표 계산
+            // Calculate new coordinates based on pointer position
             const mouseRatioX = (point.x - viewBox.x) / viewBox.width;
             const mouseRatioY = (point.y - viewBox.y) / viewBox.height;
             
             const newX = point.x - mouseRatioX * newWidth;
             const newY = point.y - mouseRatioY * newHeight;
             
-            // viewBox 업데이트
+            // Update viewBox
             viewBox = {
                 x: newX,
                 y: newY,
@@ -1489,37 +1489,37 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         function resetZoom() {
             if (!svgElement) return;
             
-            // 그래프를 화면에 맞게 재조정
+            // Adjust graph size to fit the screen
             fitGraphToContainer();
         }
         
         function fitGraphToContainer() {
             if (!svgElement) return;
             
-            // 컨테이너 크기 가져오기
+            // Get container size
             const container = document.getElementById('graph-container');
             const containerRect = container.getBoundingClientRect();
             
-            // SVG의 viewBox 가져오기
+            // Get SVG's viewBox
             const bbox = svgElement.getBBox();
             
-            // 컨테이너 크기와 그래프 크기의 비율 계산
+            // Calculate ratio between container size and graph size
             const widthRatio = containerRect.width / bbox.width;
             const heightRatio = containerRect.height / bbox.height;
             
-            // 더 작은 비율을 사용하여 그래프가 완전히 보이도록 함
-            const ratio = Math.min(widthRatio, heightRatio) * 0.7; // 여백을 위해 70%만 사용
+            // Use smaller ratio to fit graph completely
+            const ratio = Math.min(widthRatio, heightRatio) * 0.7; // 70% margin
             
-            // 최대 확대 비율 제한 (노드가 적은 경우 과도한 확대 방지)
+            // Limit maximum zoom (prevents excessive zoom for small graphs)
             const limitedRatio = Math.min(ratio, 0.7);
             
-            // 새 viewBox 계산
-            const newWidth = bbox.width * 1.5; // 좌우 여백 확보를 위해 너비 확장
-            const newHeight = bbox.height * 1.5; // 상하 여백 확보를 위해 높이 확장
+            // Calculate new viewBox
+            const newWidth = bbox.width * 1.5; // Add some padding on both sides
+            const newHeight = bbox.height * 1.5; // Add some padding on both sides
             const centerX = bbox.x + bbox.width / 2;
             const centerY = bbox.y + bbox.height / 2;
             
-            // 화면 중앙에 그래프가 오도록 viewBox 설정
+            // Set viewBox to center the graph on the screen
             viewBox = {
                 x: centerX - newWidth / 2,
                 y: centerY - newHeight / 2,
@@ -1527,10 +1527,10 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 height: newHeight
             };
             
-            // 계산된 viewBox 적용
+            // Apply calculated viewBox
             updateViewBox();
             
-            // 초기 줌 레벨 설정
+            // Set initial zoom level
             currentZoom = limitedRatio;
         }
         
@@ -1554,12 +1554,12 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 // Re-render with new data
                 renderGraph();
             } else if (message.command === 'updateTheme') {
-                // 페이지 새로고침 대신 테마를 적용하고 그래프 재렌더링
+                // Refresh page instead of applying theme to graph
                 dotSrc = message.dotContent;
                 isFocusedMode = message.isFocusedMode;
                 centerModule = message.centerModule;
                 
-                // 현재 테마 상태 업데이트
+                // Update current theme state
                 isDarkTheme = message.isDarkTheme;
                 
                 // Apply theme changes
@@ -1568,28 +1568,28 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 document.documentElement.style.setProperty('--dependencies-color', 
                     isDarkTheme ? 'indianred' : 'lightcoral');
                 
-                // document의 클래스를 테마에 맞게 업데이트
+                // Update class of document
                 if (isDarkTheme) {
                     document.body.classList.add('vscode-dark');
                     document.body.classList.remove('vscode-light');
-                    document.body.style.backgroundColor = '#1e1e1e';  // 직접 배경색 설정
+                    document.body.style.backgroundColor = '#1e1e1e';  // Directly set background color
                 } else {
                     document.body.classList.add('vscode-light');
                     document.body.classList.remove('vscode-dark');
-                    document.body.style.backgroundColor = '#ffffff';  // 직접 배경색 설정
+                    document.body.style.backgroundColor = '#ffffff';  // Directly set background color
                 }
                 
-                // 그래프 컨테이너 배경색 설정
+                // Set graph container background color
                 const graphContainer = document.getElementById('graph-container');
                 if (graphContainer) {
                     graphContainer.style.backgroundColor = 'transparent';
                 }
                 
-                // 기존 SVG 요소가 있으면 직접 업데이트
+                // Update existing SVG elements directly
                 if (svgElement) {
                     updateSvgStylesForTheme(svgElement, isDarkTheme);
                 } else {
-                    // SVG가 없는 경우 렌더링 다시 시도
+                    // If SVG doesn't exist, try rendering again
                     renderGraph();
                 }
             } else if (message.command === 'showError') {
@@ -1665,36 +1665,36 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
     vscode.window.onDidChangeActiveColorTheme(theme => {
       const newIsDarkTheme = theme.kind === vscode.ColorThemeKind.Dark;
       if (currentPanel && currentDotContent) {
-        // 테마에 맞게 DOT 내용 다시 생성
+        // Regenerate DOT content based on new theme
         let updatedDotContent = currentDotContent;
 
-        // 테마에 맞는 그래프 속성 설정
+        // Set appropriate graph attributes based on new theme
         const themeAttributes = newIsDarkTheme ?
           'bgcolor="transparent" fontcolor="#e0e0e0"' :
           'bgcolor="transparent" fontcolor="#333333"';
 
-        // 노드 스타일 설정
+        // Set node styles based on new theme
         const nodeStyle = newIsDarkTheme ?
           'node[shape=box, fontname="sans-serif", style="filled", fillcolor="#1e1e1e", margin="0.3,0.2", color="#aaaaaa", penwidth=1]' :
           'node[shape=box, fontname="sans-serif", style="filled", fillcolor="#f0f0f0", margin="0.3,0.2", color="#666666", penwidth=1]';
 
-        // 엣지 스타일 설정
+        // Set edge styles based on new theme
         const edgeStyle = newIsDarkTheme ?
           'edge[color="#555555", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]' :
           'edge[color="#cccccc", arrowsize=0.8, arrowhead=normal, penwidth=1, minlen=1]';
 
-        // 기본 속성 설정
+        // Set basic properties
         updatedDotContent = updatedDotContent.replace(/^(digraph\s+\w+\s*\{)/m,
           `$1\n  ${themeAttributes}\n  ${nodeStyle}\n  ${edgeStyle}\n  splines=true\n  overlap=false\n  sep="+10"`);
 
-        // 노드 스타일 강제 적용
+        // Force apply node styles
         if (newIsDarkTheme) {
           updatedDotContent = updatedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#1e1e1e", ');
         } else {
           updatedDotContent = updatedDotContent.replace(/\s+(\w+)\s*\[/g, ' $1 [style="filled", fillcolor="#f0f0f0", ');
         }
 
-        // 웹뷰에 테마 변경 명령 전송 - 페이지 리로드 대신 그래프 재렌더링
+        // Send webview a command to update theme
         currentPanel.webview.postMessage({
           command: 'updateTheme',
           dotContent: updatedDotContent,
@@ -1916,11 +1916,6 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
       context.subscriptions
     );
   }
-}
-
-// Helper function to get webview URIs for local files
-function getWebviewUri(webview: vscode.Webview, extensionUri: vscode.Uri, ...pathSegments: string[]): vscode.Uri {
-  return webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, ...pathSegments));
 }
 
 // Helper function to try to find the module in the project when file path is unavailable
