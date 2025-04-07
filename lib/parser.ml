@@ -1,5 +1,6 @@
 open Stdlib
 open Parse_utils
+open Eio.Std
 
 (* Module info representation *)
 type module_info = {
@@ -10,7 +11,7 @@ type module_info = {
   file_path : string option;
 }
 
-(* Cache management module *)
+(* Cache management module with Eio synchronization *)
 module Cache = struct
   (* Cache entry type including digest information *)
   type cache_entry = { module_info : module_info }
@@ -23,6 +24,11 @@ module Cache = struct
 
   (* AST dependency check result cache *)
   let ast_dependency_cache = Hashtbl.create 200
+
+  (* Mutex locks for thread safety *)
+  let cache_table_mutex = Eio.Mutex.create ()
+  let ast_cache_mutex = Eio.Mutex.create ()
+  let ast_dependency_cache_mutex = Eio.Mutex.create ()
 
   (* Initialize the cache - simplified to just return false as we don't load from disk anymore *)
   let initialize ?(verbose = false) ?(skip_cache = false) () =
@@ -37,25 +43,71 @@ module Cache = struct
     false
 
   (* Add or update an entry in the cache *)
-  let add ?(skip_cache = false) path module_info =
+  let add ?(verbose = false) ?(skip_cache = false) path module_info =
     (* Skip adding to cache if skip_cache is set *)
-    if not skip_cache then
-      let entry = { module_info } in
-      Hashtbl.replace cache_table path entry
+    if not skip_cache then (
+      try
+        Eio.Mutex.lock cache_table_mutex;
+        let entry = { module_info } in
+        Hashtbl.replace cache_table path entry;
+        Eio.Mutex.unlock cache_table_mutex
+      with exn ->
+        Eio.Mutex.unlock cache_table_mutex;
+        if verbose then
+          Printf.eprintf "Error adding to cache: %s\n" (Printexc.to_string exn))
 
-  (* Cache AST file data *)
-  let cache_ast_data ?(skip_cache = false) ast_path data =
-    if not skip_cache then Hashtbl.replace ast_cache ast_path data
+  (* Cache AST file data with mutex protection *)
+  let cache_ast_data ?(verbose = false) ?(skip_cache = false) ast_path data =
+    if not skip_cache then (
+      try
+        Eio.Mutex.lock ast_cache_mutex;
+        Hashtbl.replace ast_cache ast_path data;
+        Eio.Mutex.unlock ast_cache_mutex
+      with exn ->
+        Eio.Mutex.unlock ast_cache_mutex;
+        if verbose then
+          Printf.eprintf "Error caching AST data: %s\n" (Printexc.to_string exn))
 
-  (* Get cached AST file data *)
-  let get_ast_data ast_path = Hashtbl.find_opt ast_cache ast_path
+  (* Get cached AST file data with mutex protection *)
+  let get_ast_data ?(verbose = false) ast_path =
+    try
+      Eio.Mutex.lock ast_cache_mutex;
+      let result = Hashtbl.find_opt ast_cache ast_path in
+      Eio.Mutex.unlock ast_cache_mutex;
+      result
+    with exn ->
+      Eio.Mutex.unlock ast_cache_mutex;
+      if verbose then
+        Printf.eprintf "Error getting AST data: %s\n" (Printexc.to_string exn);
+      None
 
-  (* Cache AST dependency check result *)
-  let cache_ast_dependency_result ?(skip_cache = false) key result =
-    if not skip_cache then Hashtbl.replace ast_dependency_cache key result
+  (* Cache AST dependency check result with mutex protection *)
+  let cache_ast_dependency_result ?(verbose = false) ?(skip_cache = false) key
+      result =
+    if not skip_cache then (
+      try
+        Eio.Mutex.lock ast_dependency_cache_mutex;
+        Hashtbl.replace ast_dependency_cache key result;
+        Eio.Mutex.unlock ast_dependency_cache_mutex
+      with exn ->
+        Eio.Mutex.unlock ast_dependency_cache_mutex;
+        if verbose then
+          Printf.eprintf "Error caching AST dependency: %s\n"
+            (Printexc.to_string exn))
 
-  (* Get cached AST dependency check result *)
-  let get_ast_dependency_result key = Hashtbl.find_opt ast_dependency_cache key
+  (* Get cached AST dependency check result with mutex protection *)
+  let get_ast_dependency_result ?(verbose = false) key =
+    try
+      Eio.Mutex.lock ast_dependency_cache_mutex;
+      let result = Hashtbl.find_opt ast_dependency_cache key in
+      Eio.Mutex.unlock ast_dependency_cache_mutex;
+      result
+    with exn ->
+      Eio.Mutex.unlock ast_dependency_cache_mutex;
+      if verbose then
+        Printf.eprintf "Error getting AST dependency: %s\n"
+          (Printexc.to_string exn);
+      None
 
   (* Find an entry in the cache, comparing digest information *)
   let find ?(verbose = false) ?(skip_cache = false) path
@@ -66,43 +118,73 @@ module Cache = struct
         Printf.printf "Skip cache flag is set, forcing cache miss for %s\n" path;
       None)
     else
-      match Hashtbl.find_opt cache_table path with
-      | None ->
-          if verbose then Printf.printf "Cache miss for %s\n" path;
-          None
-      | Some entry ->
-          (* Check if the digests match *)
-          let interface_match =
-            match
-              (entry.module_info.interface_digest, current_interface_digest)
-            with
-            | Some d1, Some d2 -> d1 = d2
-            | None, None -> true
-            | _ -> false
-          in
+      try
+        Eio.Mutex.lock cache_table_mutex;
+        let result =
+          match Hashtbl.find_opt cache_table path with
+          | None ->
+              if verbose then Printf.printf "Cache miss for %s\n" path;
+              None
+          | Some entry ->
+              (* Check if the digests match *)
+              let interface_match =
+                match
+                  (entry.module_info.interface_digest, current_interface_digest)
+                with
+                | Some d1, Some d2 -> d1 = d2
+                | None, None -> true
+                | _ -> false
+              in
 
-          let implementation_match =
-            match
-              (entry.module_info.implementation_digest, current_source_digest)
-            with
-            | Some d1, Some d2 -> d1 = d2
-            | None, None -> true
-            | _ -> false
-          in
+              let implementation_match =
+                match
+                  ( entry.module_info.implementation_digest,
+                    current_source_digest )
+                with
+                | Some d1, Some d2 -> d1 = d2
+                | None, None -> true
+                | _ -> false
+              in
 
-          if interface_match && implementation_match then (
-            if verbose then Printf.printf "Cache hit for %s\n" path;
-            Some entry.module_info)
-          else (
-            if verbose then
-              Printf.printf "Cache invalid for %s (digest mismatch)\n" path;
-            None)
+              if interface_match && implementation_match then (
+                if verbose then Printf.printf "Cache hit for %s\n" path;
+                Some entry.module_info)
+              else (
+                if verbose then
+                  Printf.printf "Cache invalid for %s (digest mismatch)\n" path;
+                None)
+        in
+        Eio.Mutex.unlock cache_table_mutex;
+        result
+      with exn ->
+        Eio.Mutex.unlock cache_table_mutex;
+        if verbose then
+          Printf.eprintf "Error finding in cache: %s\n" (Printexc.to_string exn);
+        None
 
-  (* Clear the cache *)
-  let clear () =
-    Hashtbl.clear cache_table;
-    Hashtbl.clear ast_cache;
-    Hashtbl.clear ast_dependency_cache
+  (* Clear the cache with mutex protection *)
+  let clear ?(verbose = false) () =
+    try
+      (* Lock all mutexes to safely clear all caches *)
+      Eio.Mutex.lock cache_table_mutex;
+      Eio.Mutex.lock ast_cache_mutex;
+      Eio.Mutex.lock ast_dependency_cache_mutex;
+
+      Hashtbl.clear cache_table;
+      Hashtbl.clear ast_cache;
+      Hashtbl.clear ast_dependency_cache;
+
+      (* Unlock in reverse order *)
+      Eio.Mutex.unlock ast_dependency_cache_mutex;
+      Eio.Mutex.unlock ast_cache_mutex;
+      Eio.Mutex.unlock cache_table_mutex
+    with exn ->
+      (* Make sure to unlock in case of exceptions *)
+      (try Eio.Mutex.unlock ast_dependency_cache_mutex with _ -> ());
+      (try Eio.Mutex.unlock ast_cache_mutex with _ -> ());
+      (try Eio.Mutex.unlock cache_table_mutex with _ -> ());
+      if verbose then
+        Printf.eprintf "Error clearing cache: %s\n" (Printexc.to_string exn)
 end
 
 (* Exceptions *)
@@ -170,7 +252,7 @@ module DependencyExtractor = struct
   (* Function to read AST file contents efficiently *)
   let read_ast_file ?(verbose = false) ?(skip_cache = false) ast_path =
     (* Check if AST data is already cached *)
-    match Cache.get_ast_data ast_path with
+    match Cache.get_ast_data ~verbose ast_path with
     | Some data when not skip_cache ->
         if verbose then Printf.printf "Using cached AST data for %s\n" ast_path;
         data
@@ -199,35 +281,45 @@ module DependencyExtractor = struct
 
             (* Read all module references at once instead of line by line *)
             let modules = ref [] in
-            let rec read_modules remaining =
-              if remaining <= 0 then !modules
+            let rec read_modules remaining max_iterations =
+              if remaining <= 0 || max_iterations <= 0 then !modules
               else
                 try
                   let buf = Buffer.create 128 in
-                  let rec read_line () =
-                    let c = input_char ic in
-                    if c = '\n' then (
-                      let line = Buffer.contents buf in
-                      if
-                        String.length line > 0
-                        && line.[0] <> '/'
-                        && (String.length line <= 1
-                           || not (line.[0] = 'C' && line.[1] = ':'))
-                      then modules := line :: !modules;
-                      read_modules (remaining - 1))
-                    else (
-                      Buffer.add_char buf c;
-                      read_line ())
+                  let rec read_line max_chars =
+                    if max_chars <= 0 then
+                      (* Line too long, skip the rest of this line *)
+                      try
+                        while input_char ic <> '\n' do
+                          ()
+                        done;
+                        read_modules (remaining - 1) (max_iterations - 1)
+                      with End_of_file -> !modules
+                    else
+                      let c = input_char ic in
+                      if c = '\n' then (
+                        let line = Buffer.contents buf in
+                        if
+                          String.length line > 0
+                          && line.[0] <> '/'
+                          && (String.length line <= 1
+                             || not (line.[0] = 'C' && line.[1] = ':'))
+                        then modules := line :: !modules;
+                        read_modules (remaining - 1) (max_iterations - 1))
+                      else (
+                        Buffer.add_char buf c;
+                        read_line (max_chars - 1))
                   in
-                  read_line ()
+                  read_line 10000 (* Limit line length to 10,000 chars *)
                 with End_of_file -> !modules
             in
 
-            let result = read_modules module_count in
+            let result = read_modules module_count 200000 in
+            (* Limit iterations to prevent infinite loops *)
             close_in ic;
 
             (* Cache the results *)
-            Cache.cache_ast_data ~skip_cache ast_path result;
+            Cache.cache_ast_data ~verbose ~skip_cache ast_path result;
 
             result
           with e ->
@@ -284,7 +376,7 @@ module DependencyExtractor = struct
     let cache_key = source_file ^ ":" ^ module_name in
 
     (* Check if result is already cached *)
-    match Cache.get_ast_dependency_result cache_key with
+    match Cache.get_ast_dependency_result ~verbose cache_key with
     | Some result when not skip_cache ->
         if verbose then
           Printf.printf
@@ -305,7 +397,7 @@ module DependencyExtractor = struct
               ast_path;
 
           (* Cache the result *)
-          Cache.cache_ast_dependency_result ~skip_cache cache_key true;
+          Cache.cache_ast_dependency_result ~verbose ~skip_cache cache_key true;
           true)
         else (
           if verbose then
@@ -315,11 +407,16 @@ module DependencyExtractor = struct
           (* Get the module list from the AST file *)
           let modules = read_ast_file ~verbose ~skip_cache ast_path in
 
-          (* Simple list membership check *)
-          let result = List.mem module_name modules in
+          (* Convert to a set for O(1) lookup *)
+          let module StringSet = Set.Make (String) in
+          let modules_set = StringSet.of_list modules in
+
+          (* Efficient set membership check *)
+          let result = StringSet.mem module_name modules_set in
 
           (* Cache the result *)
-          Cache.cache_ast_dependency_result ~skip_cache cache_key result;
+          Cache.cache_ast_dependency_result ~verbose ~skip_cache cache_key
+            result;
 
           if verbose then
             Printf.printf "Module %s %s in AST file %s\n" module_name
@@ -347,7 +444,7 @@ module DependencyExtractor = struct
       List.iter
         (fun module_name ->
           let cache_key = source_file ^ ":" ^ module_name in
-          Cache.cache_ast_dependency_result ~skip_cache cache_key true)
+          Cache.cache_ast_dependency_result ~verbose ~skip_cache cache_key true)
         modules;
 
       modules (* Return all modules if AST file doesn't exist *))
@@ -359,18 +456,48 @@ module DependencyExtractor = struct
       (* Get the module list from the AST file *)
       let ast_modules = read_ast_file ~verbose ~skip_cache ast_path in
 
+      (* Convert ast_modules to a set for O(1) lookups instead of O(n) with List.mem *)
+      let module StringSet = Set.Make (String) in
+      let ast_modules_set = StringSet.of_list ast_modules in
+
       (* Filter modules that are present in the AST file *)
       let results =
-        List.filter
+        (* Add a timeout mechanism *)
+        let start_time = Unix.gettimeofday () in
+        let timeout = 5.0 in
+        (* 5 second timeout - longer for full list processing *)
+        let filtered = ref [] in
+        let timed_out = ref false in
+
+        List.iter
           (fun module_name ->
-            let is_used = List.mem module_name ast_modules in
+            (* Check if we've already timed out *)
+            if not !timed_out then (
+              if
+                (* Check if we've exceeded the timeout *)
+                Unix.gettimeofday () -. start_time > timeout
+              then (
+                Printf.eprintf
+                  "Warning: Timeout during batch module filtering\n";
+                timed_out := true)
+              else
+                (* O(1) lookup using set instead of O(n) with List.mem *)
+                let is_used = StringSet.mem module_name ast_modules_set in
 
-            (* Cache individual results *)
-            let cache_key = source_file ^ ":" ^ module_name in
-            Cache.cache_ast_dependency_result ~skip_cache cache_key is_used;
+                (* Cache individual results *)
+                let cache_key = source_file ^ ":" ^ module_name in
+                Cache.cache_ast_dependency_result ~verbose ~skip_cache cache_key
+                  is_used;
 
-            is_used)
-          modules
+                (* Add to filtered results if used *)
+                if is_used then filtered := module_name :: !filtered))
+          modules;
+
+        (* If we timed out, conservatively return all modules *)
+        if !timed_out then (
+          if verbose then Printf.printf "Timed out, returning all modules\n";
+          modules)
+        else List.rev !filtered
       in
 
       if verbose then
@@ -682,31 +809,10 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
           Printf.printf "Using cached module info for %s\n" module_name;
         cached_module_info
     | None ->
-        (* Continue with normal processing since no valid cache entry was found *)
-        if verbose then (
-          Printf.printf "Processing module %s from scratch\n" module_name;
-          (* Print digest information for debugging *)
-          (match cmt_info.cmt_interface_digest with
-          | Some digest ->
-              Printf.printf "Interface digest: %s\n" (Digest.to_hex digest)
-          | None -> Printf.printf "No interface digest available\n");
+        if verbose then
+          Printf.printf "Parsing module %s from scratch\n" module_name;
 
-          match cmt_info.cmt_source_digest with
-          | Some digest ->
-              Printf.printf "Source digest: %s\n" (Digest.to_hex digest)
-          | None -> Printf.printf "No source digest available\n");
-
-        (* Print cmt_sourcefile for debugging *)
-        (if verbose then
-           match cmt_info.Cmt_format.cmt_sourcefile with
-           | Some source_file ->
-               Printf.printf "cmt_sourcefile for %s: %s (extension: %s)\n"
-                 module_name source_file
-                 (try Filename.extension source_file with _ -> "none")
-           | None ->
-               Printf.printf "No cmt_sourcefile found for %s\n" module_name);
-
-        (* Extract dependencies using only the parsed cmt_info *)
+        (* Extract dependencies from cmt_info *)
         let dependencies =
           DependencyExtractor.extract_dependencies_from_cmt_info ~verbose
             ~skip_cache cmt_info
@@ -747,7 +853,7 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
         in
 
         (* Add to cache *)
-        Cache.add ~skip_cache path module_info;
+        Cache.add ~verbose ~skip_cache path module_info;
 
         module_info
   with
