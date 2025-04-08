@@ -266,15 +266,7 @@ module DependencyExtractor = struct
             let ic = open_in_bin ast_path in
 
             (* Efficiently read the entire header section of the AST file *)
-            let module_count =
-              try
-                let b1 = input_byte ic in
-                let b2 = input_byte ic in
-                let b3 = input_byte ic in
-                let b4 = input_byte ic in
-                (b1 lsl 24) lor (b2 lsl 16) lor (b3 lsl 8) lor b4
-              with _ -> 0
-            in
+            let module_count = input_binary_int ic in
 
             (* Skip the newline after the count *)
             let _ = try input_char ic with _ -> '\000' in
