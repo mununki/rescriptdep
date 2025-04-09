@@ -666,11 +666,42 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             user-select: none;
         }
         
-        .controls {
+        /* Top controls wrapper */
+        .top-controls-wrapper {
             display: flex;
-            justify-content: center;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 10px;
-            gap: 10px;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+        
+        /* Legend styles - changed to lines */
+        .legend {
+            display: flex;
+            justify-content: flex-start;
+            gap: 20px;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+        }
+        
+        .legend-line {
+            width: 24px;
+            height: 2px;
+            margin-right: 5px;
+        }
+        
+        /* Search filter styles */
+        .search-container {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
             position: relative;
             z-index: 10;
         }
@@ -691,37 +722,6 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         .zoom-controls {
             display: flex;
             gap: 5px;
-        }
-
-        /* Legend styles - changed to lines */
-        .legend {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 10px;
-            gap: 20px;
-            position: relative;
-            z-index: 10;
-        }
-        
-        .legend-item {
-            display: flex;
-            align-items: center;
-        }
-        
-        .legend-line {
-            width: 24px;
-            height: 2px;
-            margin-right: 5px;
-        }
-        
-        /* Search filter styles */
-        .search-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 10px;
-            position: relative;
-            z-index: 10;
         }
         
         .search-input {
@@ -759,8 +759,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         .search-message {
             position: absolute;
             top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
+            left: 0;
             font-size: 12px;
             color: var(--vscode-inputValidation-errorForeground);
             margin-top: 3px;
@@ -774,6 +773,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         
         .search-message.visible {
             opacity: 1;
+            white-space: nowrap;
         }
         
         /* Define colors for arrows that match the legend */
@@ -895,20 +895,22 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
     </style>
 </head>
 <body class="${isDarkTheme ? 'vscode-dark' : 'vscode-light'}">
-    <div class="legend">
-        <div class="legend-item">
-            <div class="legend-line" style="background-color: var(--dependents-color, lightblue);"></div>
-            <span>Dependents (modules that use the center module)</span>
+    <div class="top-controls-wrapper">
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-line" style="background-color: var(--dependents-color, lightblue);"></div>
+                <span>Dependents (modules that use the center module)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-line" style="background-color: var(--dependencies-color, lightcoral);"></div>
+                <span>Dependencies (modules used by the center module)</span>
+            </div>
         </div>
-        <div class="legend-item">
-            <div class="legend-line" style="background-color: var(--dependencies-color, lightcoral);"></div>
-            <span>Dependencies (modules used by the center module)</span>
+        <div class="search-container">
+            <input type="text" class="search-input" id="module-search" placeholder="Search for module..." />
+            <button class="search-button" id="search-button">Search</button>
+            <div class="search-message" id="search-message">Module not found</div>
         </div>
-    </div>
-    <div class="search-container">
-        <input type="text" class="search-input" id="module-search" placeholder="Search for module..." />
-        <button class="search-button" id="search-button">Search</button>
-        <div class="search-message" id="search-message">Module not found</div>
     </div>
     <div id="graph-container">
         <div id="graph"></div>
