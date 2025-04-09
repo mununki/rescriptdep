@@ -714,6 +714,68 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             margin-right: 5px;
         }
         
+        /* Search filter styles */
+        .search-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 10px;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .search-input {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--vscode-input-border);
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            margin-right: 5px;
+            width: 200px;
+        }
+        
+        .search-input:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+        }
+        
+        .search-input.not-found {
+            border-color: var(--vscode-inputValidation-errorBorder);
+            outline: 1px solid var(--vscode-inputValidation-errorBorder);
+        }
+        
+        .search-button {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .search-button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+        
+        .search-message {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: var(--vscode-inputValidation-errorForeground);
+            margin-top: 3px;
+            background-color: var(--vscode-inputValidation-errorBackground);
+            padding: 2px 6px;
+            border-radius: 3px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        
+        .search-message.visible {
+            opacity: 1;
+        }
+        
         /* Define colors for arrows that match the legend */
         :root {
             /* These variables will be assigned at runtime based on theme */
@@ -843,6 +905,11 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             <span>Dependencies (modules used by the center module)</span>
         </div>
     </div>
+    <div class="search-container">
+        <input type="text" class="search-input" id="module-search" placeholder="Search for module..." />
+        <button class="search-button" id="search-button">Search</button>
+        <div class="search-message" id="search-message">Module not found</div>
+    </div>
     <div id="graph-container">
         <div id="graph"></div>
         <div id="error-container">
@@ -870,6 +937,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         let dotSrc = '';
         let isFocusedMode = false;
         let centerModule = null;
+        let allModuleNodes = []; // Store all available module names
         
         // Theme-related variables - detect theme from body class during initialization
         let isDarkTheme = document.body.classList.contains('vscode-dark');
@@ -959,7 +1027,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                                 polygon.setAttribute('stroke', arrowColor);
                             });
                         }
-                        // 2. Center -> Dependencies direction (arrows going out from center)
+                        // 2. Center -> Dependencies direction (arrows going out from the center module)
                         else if (source === centerModule) {
                             // Add dependency-edge class for CSS targeting
                             edge.classList.add('dependency-edge');
@@ -1013,7 +1081,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             console.error('Graph rendering error:', error);
         }
         
-        // Render the DOT data - only called after we receive data
+        // Function to render the DOT data - only called after we receive data
         function renderGraph() {
             if (!dotSrc) {
                 console.log('No DOT data yet');
@@ -1066,16 +1134,17 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                     svgElement.style.webkitUserSelect = 'none';
                     svgElement.style.msUserSelect = 'none';
                     
-                    // Apply selection prevention to all elements in SVG
-                    const allSvgElements = svgElement.querySelectorAll('*');
-                    allSvgElements.forEach(el => {
-                        el.style.userSelect = 'none';
-                        el.style.webkitUserSelect = 'none';
-                        el.style.msUserSelect = 'none';
+                    // Collect all module names for search functionality
+                    allModuleNodes = [];
+                    const nodes = svgElement.querySelectorAll('.node');
+                    nodes.forEach(node => {
+                        const titleEl = node.querySelector('title');
+                        if (titleEl && titleEl.textContent) {
+                            allModuleNodes.push(titleEl.textContent.trim());
+                        }
                     });
                     
                     // Detect theme and add class
-                    const isDarkTheme = document.body.classList.contains('vscode-dark');
                     if (isDarkTheme) {
                         document.body.classList.add('dark-theme');
                     }
@@ -1370,18 +1439,18 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 lastX = e.clientX;
                 lastY = e.clientY;
                 
-                // 고정된 비율로 이동 - SVG 좌표계로 변환
+                // Move with fixed ratio - Transform to SVG coordinate system
                 const svgRect = svgElement.getBoundingClientRect();
                 
-                // SVG 스케일 계산 (1 화면 픽셀당 얼마만큼의 SVG 좌표가 표현되는지)
+                // Calculate SVG scale (how many SVG coordinates are represented per screen pixel)
                 const scaleX = viewBox.width / svgRect.width;
                 const scaleY = viewBox.height / svgRect.height;
                 
-                // 동일한 이동 비율 적용
-                // x, y 모두에 같은 스케일 적용을 위해 평균값 또는 최대값 사용
+                // Apply consistent movement ratio
+                // Use max value for scale to maintain consistent movement in both x and y
                 const scale = Math.max(scaleX, scaleY);
                 
-                // viewBox 업데이트
+                // Update viewBox
                 viewBox.x -= dx * scale;
                 viewBox.y -= dy * scale;
                 
@@ -1534,6 +1603,235 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             currentZoom = limitedRatio;
         }
         
+        // Function to locate and center a specific module
+        function findAndCenterModule(moduleName) {
+            if (!svgElement || !moduleName) return false;
+            
+            // Clear any previous error state
+            const searchInput = document.getElementById('module-search');
+            const searchMessage = document.getElementById('search-message');
+            if (searchInput) {
+                searchInput.classList.remove('not-found');
+            }
+            if (searchMessage) {
+                searchMessage.classList.remove('visible');
+            }
+            
+            // Normalize module name for case-insensitive search
+            const searchName = moduleName.trim();
+            
+            // Find matching module (exact match first)
+            let matchingNode = Array.from(svgElement.querySelectorAll('.node')).find(node => {
+                const titleEl = node.querySelector('title');
+                return titleEl && titleEl.textContent === searchName;
+            });
+            
+            // If no exact match, try case-insensitive search
+            if (!matchingNode) {
+                const lowerSearchName = searchName.toLowerCase();
+                matchingNode = Array.from(svgElement.querySelectorAll('.node')).find(node => {
+                    const titleEl = node.querySelector('title');
+                    return titleEl && titleEl.textContent && titleEl.textContent.toLowerCase() === lowerSearchName;
+                });
+            }
+            
+            // If still no match, try partial match
+            if (!matchingNode && searchName.length >= 2) { // Only for searches with at least 2 chars
+                matchingNode = Array.from(svgElement.querySelectorAll('.node')).find(node => {
+                    const titleEl = node.querySelector('title');
+                    return titleEl && titleEl.textContent && 
+                           titleEl.textContent.toLowerCase().includes(searchName.toLowerCase());
+                });
+            }
+            
+            if (matchingNode) {
+                // Get the bounding box of the found node
+                const nodeBBox = matchingNode.getBBox();
+                
+                // Calculate center point of the node
+                const centerX = nodeBBox.x + nodeBBox.width / 2;
+                const centerY = nodeBBox.y + nodeBBox.height / 2;
+                
+                // Set a specific zoom level for better visibility
+                const targetZoom = 0.7; // Adjust as needed
+                const zoomPoint = { x: centerX, y: centerY };
+                
+                // Apply zoom first
+                const zoomFactor = targetZoom / currentZoom;
+                zoomByFactor(zoomFactor, zoomPoint);
+                
+                // Then center the node in the viewport
+                centerNodeInView(centerX, centerY);
+                
+                // Highlight the node visually
+                highlightNode(matchingNode);
+                
+                return true;
+            }
+            
+            return false;
+        }
+        
+        // Center a specific point in the current viewport
+        function centerNodeInView(centerX, centerY) {
+            if (!svgElement) return;
+            
+            // Calculate target viewBox values
+            const currentWidth = viewBox.width;
+            const currentHeight = viewBox.height;
+            
+            const targetViewBox = {
+                x: centerX - currentWidth / 2,
+                y: centerY + currentHeight / 2,
+                width: currentWidth,
+                height: currentHeight
+            };
+            
+            // Animate from current viewBox to target viewBox
+            animateViewBox(targetViewBox);
+        }
+        
+        // Animate viewBox changes smoothly
+        function animateViewBox(targetViewBox, duration = 500) {
+            if (!svgElement) return;
+            
+            const startViewBox = { ...viewBox };
+            const startTime = performance.now();
+            
+            function easeInOutCubic(t) {
+                return t < 0.5
+                    ? 4 * t * t * t
+                    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            }
+            
+            function animate(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Calculate current viewBox values using easing
+                const easedProgress = easeInOutCubic(progress);
+                
+                viewBox = {
+                    x: startViewBox.x + (targetViewBox.x - startViewBox.x) * easedProgress,
+                    y: startViewBox.y + (targetViewBox.y - startViewBox.y) * easedProgress,
+                    width: startViewBox.width + (targetViewBox.width - startViewBox.width) * easedProgress,
+                    height: startViewBox.height + (targetViewBox.height - startViewBox.height) * easedProgress
+                };
+                
+                updateViewBox();
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            }
+            
+            requestAnimationFrame(animate);
+        }
+        
+        // Highlight a node temporarily to make it more noticeable
+        function highlightNode(node) {
+            if (!node) return;
+            
+            // Save original styles
+            const rects = node.querySelectorAll('rect, polygon');
+            const originalStyles = [];
+            
+            rects.forEach(rect => {
+                originalStyles.push({
+                    element: rect,
+                    fill: rect.getAttribute('fill'),
+                    stroke: rect.getAttribute('stroke'),
+                    strokeWidth: rect.getAttribute('stroke-width')
+                });
+                
+                // Apply highlight styles
+                rect.setAttribute('fill', '#ffff99');
+                rect.setAttribute('stroke', '#ff9900');
+                rect.setAttribute('stroke-width', '2px');
+            });
+            
+            // Restore original styles after a delay
+            setTimeout(() => {
+                originalStyles.forEach(style => {
+                    style.element.setAttribute('fill', style.fill || '');
+                    style.element.setAttribute('stroke', style.stroke || '');
+                    style.element.setAttribute('stroke-width', style.strokeWidth || '');
+                });
+            }, 2000); // Highlight for 2 seconds
+        }
+        
+        // Setup search functionality
+        function setupSearchFunctionality() {
+            const searchInput = document.getElementById('module-search');
+            const searchButton = document.getElementById('search-button');
+            
+            if (!searchInput || !searchButton) return;
+            
+            // Clear error state when typing in search field
+            searchInput.addEventListener('input', () => {
+                searchInput.classList.remove('not-found');
+                const searchMessage = document.getElementById('search-message');
+                if (searchMessage) {
+                    searchMessage.classList.remove('visible');
+                }
+            });
+            
+            // Search function
+            const performSearch = () => {
+                const searchInput = document.getElementById('module-search');
+                if (!searchInput) return;
+                
+                const searchTerm = searchInput.value.trim();
+                if (searchTerm.length === 0) return;
+                
+                const found = findAndCenterModule(searchTerm);
+                if (!found) {
+                    // Show visual feedback when module not found
+                    if (searchInput) {
+                        searchInput.classList.add('not-found');
+                    }
+                    
+                    // Show error message
+                    const searchMessage = document.getElementById('search-message');
+                    if (searchMessage) {
+                        searchMessage.textContent = 'Module "' + searchTerm + '" not found';
+                        searchMessage.classList.add('visible');
+                        
+                        // Hide message after a delay
+                        setTimeout(() => {
+                            if (searchMessage) {
+                                searchMessage.classList.remove('visible');
+                            }
+                            if (searchInput) {
+                                searchInput.classList.remove('not-found');
+                            }
+                        }, 3000);
+                    }
+                    
+                    // Also log to console
+                    console.log('Module not found: ' + searchTerm);
+                }
+            };
+            
+            // Search button click handler
+            searchButton.addEventListener('click', performSearch);
+            
+            // Enter key in search input
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+            });
+            
+            // Handle Cmd+F or Ctrl+F to focus search input
+            document.addEventListener('keydown', (e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+                    e.preventDefault(); // Prevent browser's default search
+                    searchInput.focus();
+                }
+            });
+        }
+        
         // Listen for messages from VS Code
         window.addEventListener('message', event => {
             const message = event.data;
@@ -1545,6 +1843,9 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 
                 // Now that we have data, render the graph
                 renderGraph();
+                
+                // Setup search after graph is rendered
+                setupSearchFunctionality();
             } else if (message.command === 'updateGraph') {
                 // Update graph with new data
                 dotSrc = message.dotContent;
@@ -1553,6 +1854,9 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 
                 // Re-render with new data
                 renderGraph();
+                
+                // Refresh search setup
+                setupSearchFunctionality();
             } else if (message.command === 'updateTheme') {
                 // Refresh page instead of applying theme to graph
                 dotSrc = message.dotContent;
@@ -1591,6 +1895,17 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 } else {
                     // If SVG doesn't exist, try rendering again
                     renderGraph();
+                }
+            } else if (message.command === 'searchModule') {
+                // Handle search request from extension
+                const moduleName = message.moduleName;
+                if (moduleName) {
+                    findAndCenterModule(moduleName);
+                    // Update search input to show the search term
+                    const searchInput = document.getElementById('module-search');
+                    if (searchInput instanceof HTMLInputElement) {
+                        searchInput.value = moduleName;
+                    }
                 }
             } else if (message.command === 'showError') {
                 // Display an error message without rendering graph
@@ -1745,6 +2060,17 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
               }
             } catch (error) {
               vscode.window.showErrorMessage(`Failed to open file: ${error}`);
+            }
+            break;
+
+          case 'searchModule':
+            // Handle search request from extension UI
+            if (message.moduleName) {
+              // Simply forward the request back to the webview
+              currentPanel?.webview.postMessage({
+                command: 'searchModule',
+                moduleName: message.moduleName
+              });
             }
             break;
 
