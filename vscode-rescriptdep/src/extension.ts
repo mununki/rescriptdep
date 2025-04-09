@@ -617,8 +617,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ReScript Dependency Graph</title>
-    <script src="https://unpkg.com/viz.js@2.1.2/viz.js"></script>
-    <script src="https://unpkg.com/viz.js@2.1.2/full.render.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@viz-js/viz@3.12.0/lib/viz-standalone.min.js"></script>
     <style>
         /* Only keep basic styles */
         body {
@@ -1105,270 +1104,270 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             if (graphContainer) {
                 graphContainer.style.backgroundColor = 'transparent';
             }
-        
-            const viz = new Viz();
             
-            viz.renderSVGElement(dotSrc)
-                .then(element => {
-                    // Hide any previous error
-                    const errorContainer = document.getElementById('error-container');
-                    if (errorContainer) {
-                        errorContainer.style.display = 'none';
+            Viz.instance().then(viz => {
+              const element = viz.renderSVGElement(dotSrc);
+              
+              try {
+                // Hide any previous error
+                const errorContainer = document.getElementById('error-container');
+                if (errorContainer) {
+                    errorContainer.style.display = 'none';
+                }
+                
+                // Show graph
+                const graphElem = document.getElementById('graph');
+                if (graphElem) {
+                    graphElem.style.display = 'block';
+                }
+                
+                const container = document.getElementById('graph');
+                // Remove any existing graph
+                while (container.firstChild) {
+                    container.removeChild(container.firstChild);
+                }
+                
+                container.appendChild(element);
+                svgElement = element;
+                
+                // Add selection prevention styles to SVG element
+                svgElement.style.userSelect = 'none';
+                svgElement.style.webkitUserSelect = 'none';
+                svgElement.style.msUserSelect = 'none';
+                
+                // Collect all module names for search functionality
+                allModuleNodes = [];
+                const nodes = svgElement.querySelectorAll('.node');
+                nodes.forEach(node => {
+                    const titleEl = node.querySelector('title');
+                    if (titleEl && titleEl.textContent) {
+                        allModuleNodes.push(titleEl.textContent.trim());
                     }
-                    
-                    // Show graph
-                    const graphElem = document.getElementById('graph');
-                    if (graphElem) {
-                        graphElem.style.display = 'block';
+                });
+                
+                // Detect theme and add class
+                if (isDarkTheme) {
+                    document.body.classList.add('dark-theme');
+                }
+                
+                // Direct SVG modification - change all node background colors
+                const nodeRects = svgElement.querySelectorAll('.node rect, .node polygon');
+                const bgColor = isDarkTheme ? '#1e1e1e' : '#f0f0f0';
+                
+                nodeRects.forEach(rect => {
+                    rect.setAttribute('fill', bgColor);
+                    // Also set border clearly
+                    rect.setAttribute('stroke', isDarkTheme ? '#aaaaaa' : '#666666');
+                    rect.setAttribute('stroke-width', '1px');
+                    // Add rounded corners
+                    if (rect.tagName.toLowerCase() === 'rect') {
+                        rect.setAttribute('rx', '4');
+                        rect.setAttribute('ry', '4');
                     }
-                    
-                    const container = document.getElementById('graph');
-                    // Remove any existing graph
-                    while (container.firstChild) {
-                        container.removeChild(container.firstChild);
-                    }
-                    
-                    container.appendChild(element);
-                    svgElement = element;
-                    
-                    // Add selection prevention styles to SVG element
-                    svgElement.style.userSelect = 'none';
-                    svgElement.style.webkitUserSelect = 'none';
-                    svgElement.style.msUserSelect = 'none';
-                    
-                    // Collect all module names for search functionality
-                    allModuleNodes = [];
-                    const nodes = svgElement.querySelectorAll('.node');
-                    nodes.forEach(node => {
+                });
+                
+                // Change text colors
+                const nodeTexts = svgElement.querySelectorAll('.node text');
+                if (isDarkTheme) {
+                    nodeTexts.forEach(text => {
+                        text.setAttribute('fill', '#cccccc'); // Light gray
+                    });
+                } else {
+                    nodeTexts.forEach(text => {
+                        text.setAttribute('fill', '#333333'); // Dark gray
+                    });
+                }
+                
+                // Set SVG background color - set background color for the top-level g element
+                const rootG = svgElement.querySelector('g');
+                if (rootG) {
+                    // Use transparent background in SVG and container background color
+                    rootG.style.backgroundColor = 'transparent';
+                }
+                
+                // Set background for SVG (entire SVG area)
+                svgElement.style.backgroundColor = 'transparent';
+                
+                // Update document and container background colors
+                document.body.style.backgroundColor = isDarkTheme ? '#1e1e1e' : '#ffffff';
+                const graphContainer = document.getElementById('graph-container');
+                if (graphContainer) {
+                    graphContainer.style.backgroundColor = 'transparent';
+                }
+                
+                // Modify arrow styles - set border and background color identically
+                const edgePaths = svgElement.querySelectorAll('.edge path');
+                const arrowColor = isDarkTheme ? '#555555' : '#cccccc';
+                edgePaths.forEach(path => {
+                    path.setAttribute('stroke', arrowColor);
+                    // Set fill to none so it only affects arrow heads
+                    path.setAttribute('fill', 'none');
+                    path.setAttribute('stroke-width', '1.2');
+                });
+                
+                // Adjust arrow head styles
+                const arrowHeads = svgElement.querySelectorAll('.edge polygon');
+                arrowHeads.forEach(head => {
+                    head.setAttribute('fill', arrowColor);
+                    head.setAttribute('stroke', arrowColor);
+                });
+                
+                // Handle edge colors for center module in focus mode
+                if (isFocusedMode && centerModule) {
+                    // Identify center module node (title text matches center module name)
+                    const centerNode = Array.from(svgElement.querySelectorAll('.node')).find(node => {
                         const titleEl = node.querySelector('title');
-                        if (titleEl && titleEl.textContent) {
-                            allModuleNodes.push(titleEl.textContent.trim());
-                        }
+                        return titleEl && titleEl.textContent === centerModule;
                     });
                     
-                    // Detect theme and add class
-                    if (isDarkTheme) {
-                        document.body.classList.add('dark-theme');
-                    }
-                    
-                    // Direct SVG modification - change all node background colors
-                    const nodeRects = svgElement.querySelectorAll('.node rect, .node polygon');
-                    const bgColor = isDarkTheme ? '#1e1e1e' : '#f0f0f0';
-                    
-                    nodeRects.forEach(rect => {
-                        rect.setAttribute('fill', bgColor);
-                        // Also set border clearly
-                        rect.setAttribute('stroke', isDarkTheme ? '#aaaaaa' : '#666666');
-                        rect.setAttribute('stroke-width', '1px');
-                        // Add rounded corners
-                        if (rect.tagName.toLowerCase() === 'rect') {
-                            rect.setAttribute('rx', '4');
-                            rect.setAttribute('ry', '4');
-                        }
-                    });
-                    
-                    // Change text colors
-                    const nodeTexts = svgElement.querySelectorAll('.node text');
-                    if (isDarkTheme) {
-                        nodeTexts.forEach(text => {
-                            text.setAttribute('fill', '#cccccc'); // Light gray
-                        });
-                    } else {
-                        nodeTexts.forEach(text => {
-                            text.setAttribute('fill', '#333333'); // Dark gray
-                        });
-                    }
-                    
-                    // Set SVG background color - set background color for the top-level g element
-                    const rootG = svgElement.querySelector('g');
-                    if (rootG) {
-                        // Use transparent background in SVG and container background color
-                        rootG.style.backgroundColor = 'transparent';
-                    }
-                    
-                    // Set background for SVG (entire SVG area)
-                    svgElement.style.backgroundColor = 'transparent';
-                    
-                    // Update document and container background colors
-                    document.body.style.backgroundColor = isDarkTheme ? '#1e1e1e' : '#ffffff';
-                    const graphContainer = document.getElementById('graph-container');
-                    if (graphContainer) {
-                        graphContainer.style.backgroundColor = 'transparent';
-                    }
-                    
-                    // Modify arrow styles - set border and background color identically
-                    const edgePaths = svgElement.querySelectorAll('.edge path');
-                    const arrowColor = isDarkTheme ? '#555555' : '#cccccc';
-                    edgePaths.forEach(path => {
-                        path.setAttribute('stroke', arrowColor);
-                        // Set fill to none so it only affects arrow heads
-                        path.setAttribute('fill', 'none');
-                        path.setAttribute('stroke-width', '1.2');
-                    });
-                    
-                    // Adjust arrow head styles
-                    const arrowHeads = svgElement.querySelectorAll('.edge polygon');
-                    arrowHeads.forEach(head => {
-                        head.setAttribute('fill', arrowColor);
-                        head.setAttribute('stroke', arrowColor);
-                    });
-                    
-                    // Handle edge colors for center module in focus mode
-                    if (isFocusedMode && centerModule) {
-                        // Identify center module node (title text matches center module name)
-                        const centerNode = Array.from(svgElement.querySelectorAll('.node')).find(node => {
-                            const titleEl = node.querySelector('title');
-                            return titleEl && titleEl.textContent === centerModule;
-                        });
-                        
-                        if (centerNode) {
-                            // Process arrows coming into the center module (Dependents)
-                            const edgesTo = svgElement.querySelectorAll('.edge');
-                            edgesTo.forEach(edge => {
-                                const titleEl = edge.querySelector('title');
-                                if (titleEl && titleEl.textContent) {
-                                    const titleText = titleEl.textContent;
-                                    // Arrow titles typically in "source->target" format
-                                    const parts = titleText.split('->');
-                                    if (parts.length === 2) {
-                                        const source = parts[0].trim();
-                                        const target = parts[1].trim();
+                    if (centerNode) {
+                        // Process arrows coming into the center module (Dependents)
+                        const edgesTo = svgElement.querySelectorAll('.edge');
+                        edgesTo.forEach(edge => {
+                            const titleEl = edge.querySelector('title');
+                            if (titleEl && titleEl.textContent) {
+                                const titleText = titleEl.textContent;
+                                // Arrow titles typically in "source->target" format
+                                const parts = titleText.split('->');
+                                if (parts.length === 2) {
+                                    const source = parts[0].trim();
+                                    const target = parts[1].trim();
+                                    
+                                    // 1. Dependents -> Center direction (arrows coming into center)
+                                    if (target === centerModule) {
+                                        // Add class for CSS styling
+                                        edge.classList.add('dependent-edge');
                                         
-                                        // 1. Dependents -> Center direction (arrows coming into center)
-                                        if (target === centerModule) {
-                                            // Add class for CSS styling
-                                            edge.classList.add('dependent-edge');
-                                            
-                                            const paths = edge.querySelectorAll('path');
-                                            const polygons = edge.querySelectorAll('polygon');
-                                            
-                                            // Use colors that match the legend
-                                            const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
-                                            
-                                            paths.forEach(path => {
-                                                path.setAttribute('stroke', arrowColor);
-                                                path.setAttribute('stroke-width', '1.5');
-                                            });
-                                            
-                                            polygons.forEach(polygon => {
-                                                polygon.setAttribute('fill', arrowColor);
-                                                polygon.setAttribute('stroke', arrowColor);
-                                            });
-                                        }
-                                        // 2. Center -> Dependencies direction (arrows going out from center)
-                                        else if (source === centerModule) {
-                                            // Add class for CSS styling
-                                            edge.classList.add('dependency-edge');
-                                            
-                                            const paths = edge.querySelectorAll('path');
-                                            const polygons = edge.querySelectorAll('polygon');
-                                            
-                                            // Use colors that match the legend
-                                            const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
-                                            
-                                            paths.forEach(path => {
-                                                path.setAttribute('stroke', arrowColor);
-                                                path.setAttribute('stroke-width', '1.5');
-                                            });
-                                            
-                                            polygons.forEach(polygon => {
-                                                polygon.setAttribute('fill', arrowColor);
-                                                polygon.setAttribute('stroke', arrowColor);
-                                            });
-                                        }
+                                        const paths = edge.querySelectorAll('path');
+                                        const polygons = edge.querySelectorAll('polygon');
+                                        
+                                        // Use colors that match the legend
+                                        const arrowColor = isDarkTheme ? 'steelblue' : 'lightblue';
+                                        
+                                        paths.forEach(path => {
+                                            path.setAttribute('stroke', arrowColor);
+                                            path.setAttribute('stroke-width', '1.5');
+                                        });
+                                        
+                                        polygons.forEach(polygon => {
+                                            polygon.setAttribute('fill', arrowColor);
+                                            polygon.setAttribute('stroke', arrowColor);
+                                        });
+                                    }
+                                    // 2. Center -> Dependencies direction (arrows going out from center)
+                                    else if (source === centerModule) {
+                                        // Add class for CSS styling
+                                        edge.classList.add('dependency-edge');
+                                        
+                                        const paths = edge.querySelectorAll('path');
+                                        const polygons = edge.querySelectorAll('polygon');
+                                        
+                                        // Use colors that match the legend
+                                        const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
+                                        
+                                        paths.forEach(path => {
+                                            path.setAttribute('stroke', arrowColor);
+                                            path.setAttribute('stroke-width', '1.5');
+                                        });
+                                        
+                                        polygons.forEach(polygon => {
+                                            polygon.setAttribute('fill', arrowColor);
+                                            polygon.setAttribute('stroke', arrowColor);
+                                        });
                                     }
                                 }
-                            });
-                        }
-                    } else {
-                        // Distinguish colors in full mode - dependencies (outgoing arrows) and dependents (incoming arrows)
-                        const edges = svgElement.querySelectorAll('.edge');
-                        const visitedNodes = new Set();
-                        
-                        // First pass: collect all node names
-                        edges.forEach(edge => {
-                            const titleEl = edge.querySelector('title');
-                            if (titleEl && titleEl.textContent) {
-                                const titleText = titleEl.textContent;
-                                const parts = titleText.split('->');
-                                if (parts.length === 2) {
-                                    const source = parts[0].trim();
-                                    const target = parts[1].trim();
-                                    visitedNodes.add(source);
-                                    visitedNodes.add(target);
-                                }
-                            }
-                        });
-                        
-                        // Second pass: modify all edge colors
-                        edges.forEach(edge => {
-                            const titleEl = edge.querySelector('title');
-                            if (titleEl && titleEl.textContent) {
-                                const titleText = titleEl.textContent;
-                                const parts = titleText.split('->');
-                                if (parts.length === 2) {
-                                    const source = parts[0].trim();
-                                    const target = parts[1].trim();
-                                    
-                                    // Outgoing arrows use dependencies color
-                                    const paths = edge.querySelectorAll('path');
-                                    const polygons = edge.querySelectorAll('polygon');
-                                    
-                                    // Darker color for dark theme
-                                    const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
-                                    
-                                    paths.forEach(path => {
-                                        path.setAttribute('stroke', arrowColor);
-                                        path.setAttribute('stroke-width', '1.2');
-                                    });
-                                    
-                                    polygons.forEach(polygon => {
-                                        polygon.setAttribute('fill', arrowColor);
-                                        polygon.setAttribute('stroke', arrowColor);
-                                    });
-                                }
                             }
                         });
                     }
+                } else {
+                    // Distinguish colors in full mode - dependencies (outgoing arrows) and dependents (incoming arrows)
+                    const edges = svgElement.querySelectorAll('.edge');
+                    const visitedNodes = new Set();
                     
-                    // Initial viewBox setup
-                    const bbox = svgElement.getBBox();
-                    viewBox = {
-                        x: bbox.x,
-                        y: bbox.y,
-                        width: bbox.width,
-                        height: bbox.height
-                    };
-                    svgElement.setAttribute('width', '100%');
-                    svgElement.setAttribute('height', '100%');
+                    // First pass: collect all node names
+                    edges.forEach(edge => {
+                        const titleEl = edge.querySelector('title');
+                        if (titleEl && titleEl.textContent) {
+                            const titleText = titleEl.textContent;
+                            const parts = titleText.split('->');
+                            if (parts.length === 2) {
+                                const source = parts[0].trim();
+                                const target = parts[1].trim();
+                                visitedNodes.add(source);
+                                visitedNodes.add(target);
+                            }
+                        }
+                    });
                     
-                    // Add styles to SVG element to fill the entire area
-                    svgElement.style.display = 'block';
-                    svgElement.style.width = '100%';
-                    svgElement.style.height = '100%';
-                    svgElement.style.margin = '0';
-                    svgElement.style.padding = '0';
-                    
-                    // Set preserveAspectRatio attribute to fit to screen
-                    svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-                    
-                    updateViewBox();
-                    
-                    // Add click handlers to nodes
-                    setupNodeClickHandlers();
-                    
-                    // Setup dragging
-                    setupDragHandlers();
-                    
-                    // Adjust initial view to fit screen
-                    fitGraphToContainer();
-                    
-                    // Set up scroll zoom
-                    setupScrollZoom();
-                })
-                .catch(error => {
-                    showErrorMessage(error);
-                });
+                    // Second pass: modify all edge colors
+                    edges.forEach(edge => {
+                        const titleEl = edge.querySelector('title');
+                        if (titleEl && titleEl.textContent) {
+                            const titleText = titleEl.textContent;
+                            const parts = titleText.split('->');
+                            if (parts.length === 2) {
+                                const source = parts[0].trim();
+                                const target = parts[1].trim();
+                                
+                                // Outgoing arrows use dependencies color
+                                const paths = edge.querySelectorAll('path');
+                                const polygons = edge.querySelectorAll('polygon');
+                                
+                                // Darker color for dark theme
+                                const arrowColor = isDarkTheme ? 'indianred' : 'lightcoral';
+                                
+                                paths.forEach(path => {
+                                    path.setAttribute('stroke', arrowColor);
+                                    path.setAttribute('stroke-width', '1.2');
+                                });
+                                
+                                polygons.forEach(polygon => {
+                                    polygon.setAttribute('fill', arrowColor);
+                                    polygon.setAttribute('stroke', arrowColor);
+                                });
+                            }
+                        }
+                    });
+                }
+                
+                // Initial viewBox setup
+                const bbox = svgElement.getBBox();
+                viewBox = {
+                    x: bbox.x,
+                    y: bbox.y,
+                    width: bbox.width,
+                    height: bbox.height
+                };
+                svgElement.setAttribute('width', '100%');
+                svgElement.setAttribute('height', '100%');
+                
+                // Add styles to SVG element to fill the entire area
+                svgElement.style.display = 'block';
+                svgElement.style.width = '100%';
+                svgElement.style.height = '100%';
+                svgElement.style.margin = '0';
+                svgElement.style.padding = '0';
+                
+                // Set preserveAspectRatio attribute to fit to screen
+                svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                
+                updateViewBox();
+                
+                // Add click handlers to nodes
+                setupNodeClickHandlers();
+                
+                // Setup dragging
+                setupDragHandlers();
+                
+                // Adjust initial view to fit screen
+                fitGraphToContainer();
+                
+                // Set up scroll zoom
+                setupScrollZoom();
+              } catch (error) {
+                showErrorMessage(error);
+              }
+            })
         }
         
         function setupNodeClickHandlers() {
