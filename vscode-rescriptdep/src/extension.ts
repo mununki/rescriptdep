@@ -1853,6 +1853,19 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 isFocusedMode = message.isFocusedMode;
                 centerModule = message.centerModule;
                 
+                // Clear search input when graph is redrawn
+                const searchInput = document.getElementById('module-search');
+                if (searchInput) {
+                    searchInput.value = '';
+                    searchInput.classList.remove('not-found');
+                    
+                    // Clear any error message
+                    const searchMessage = document.getElementById('search-message');
+                    if (searchMessage) {
+                        searchMessage.classList.remove('visible');
+                    }
+                }
+                
                 // Re-render with new data
                 renderGraph();
                 
