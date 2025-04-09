@@ -72,6 +72,12 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
+### 0.6.0
+
+- Improved dependency graph rendering with optimized layout algorithms
+- Added support for filtering modules by namespace
+- Improved error handling for invalid project configurations
+
 ### 0.5.0
 
 - Added monorepo support: The extension now detects and works with monorepo projects containing multiple ReScript packages
