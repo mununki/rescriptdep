@@ -37,9 +37,8 @@ rescriptdep [options] files_or_dirs
 # -v, --verbose           : Enable verbose output
 # -b, --benchmark         : Enable performance benchmarking
 # --no-cache              : Skip using cache
-# --cache-file <file>     : Specify cache file location
 # --clear-cache           : Clear the cache before analyzing
-# -nd, --no-dependents    : Exclude reverse dependencies (modules that depend on the target)
+# -nd, --no-dependents    : Find modules that have no dependents (not imported by any other modules)
 ```
 
 ## Development
