@@ -6,6 +6,7 @@ A Visual Studio Code extension for visualizing dependencies between ReScript mod
 
 - **Full Dependency Graph Visualization**: View the complete dependency graph of your ReScript project
 - **Module-Focused Views**: Focus on a specific module and see its direct dependencies and dependents
+- **Unused Module Detection**: Identify modules that have no dependents to help locate potential dead code
 - **Interactive Graph**: Click on modules to navigate through dependencies
 - **High Performance**: Uses digest-based caching to improve performance for large projects
 
@@ -30,6 +31,7 @@ This extension provides several commands in the Command Palette (`Ctrl+Shift+P` 
 
 - **ReScript: Show Dependency Graph**: Shows the full dependency graph of your project
 - **ReScript: Focus On Module Dependencies**: Focuses on a specific module and its relationships
+- **ReScript: Show Unused Modules**: Identifies and visualizes modules that have no dependents (potentially unused code)
 - **ReScript: Clear Dependency Cache**: Clears the cached dependency data for improved accuracy after major changes
 
 ## Cache Management
@@ -75,6 +77,9 @@ This extension doesn't require any specific settings.
 ### 0.7.0
 
 - Added new command "ReScript: Show Unused Modules" to display modules without dependents
+- Enhanced visualization with special highlighting for unused modules
+- Improved user interaction for large projects with options to switch between view modes
+- Added visual indicators and tooltips for unused modules to help identify dead code
 
 ### 0.6.0
 
