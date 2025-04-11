@@ -7,6 +7,7 @@ import * as os from 'os';
 // Command IDs
 const SHOW_DEPENDENCY_GRAPH = 'bibimbob.showDependencyGraph';
 const FOCUS_MODULE_DEPENDENCIES = 'bibimbob.focusModuleDependencies';
+const SHOW_UNUSED_MODULES = 'bibimbob.showUnusedModules';
 
 // Track the current webview panel
 let currentPanel: vscode.WebviewPanel | undefined = undefined;
@@ -16,7 +17,6 @@ let currentIsFocusedMode: boolean = false;
 let currentCenterModule: string | undefined = undefined;
 
 export function activate(context: vscode.ExtensionContext) {
-  // console.log('Bibimbob is activated'); // Removed log
   // Command for full dependency graph
   let fullGraphCommand = vscode.commands.registerCommand(SHOW_DEPENDENCY_GRAPH, async () => {
     await generateDependencyGraph(context);
@@ -27,8 +27,14 @@ export function activate(context: vscode.ExtensionContext) {
     await generateDependencyGraph(context, true);
   });
 
+  // Command for showing modules with no dependents (unused modules)
+  let unusedModulesCommand = vscode.commands.registerCommand(SHOW_UNUSED_MODULES, async () => {
+    await generateDependencyGraph(context, false, true);
+  });
+
   context.subscriptions.push(fullGraphCommand);
   context.subscriptions.push(focusModuleCommand);
+  context.subscriptions.push(unusedModulesCommand);
 }
 
 // Helper function to get current module name from active editor
@@ -163,11 +169,13 @@ async function selectMonorepoProject(projects: vscode.Uri[]): Promise<string | u
 }
 
 // Integrated common logic into a single function
-async function generateDependencyGraph(context: vscode.ExtensionContext, focusOnModule: boolean = false) {
+async function generateDependencyGraph(context: vscode.ExtensionContext, focusOnModule: boolean = false, showUnusedModules: boolean = false) {
   // Use withProgress API to show a progress notification in the bottom right
   return vscode.window.withProgress({
     location: vscode.ProgressLocation.Notification,
-    title: focusOnModule ? 'ReScript: Analyzing module dependencies...' : 'ReScript: Analyzing dependency graph...',
+    title: focusOnModule ? 'ReScript: Analyzing module dependencies...' :
+      showUnusedModules ? 'ReScript: Finding unused modules...' :
+        'ReScript: Analyzing dependency graph...',
     cancellable: true
   }, async (progress, token) => {
     const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -268,7 +276,7 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
       const cliPath = await findRescriptDepCLI(context);
 
       // Check project size first if not focusing on a specific module
-      if (!focusOnModule) {
+      if (!focusOnModule && !showUnusedModules) {
         progress.report({ message: 'Checking project size...' });
         try {
           // Get a simple DOT output to estimate the number of modules
@@ -283,19 +291,20 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
           const moduleNodes = nodeMatches.filter(match => !match.startsWith('"node ['));
           const moduleCount = moduleNodes.length;
 
-          // Log module count for debugging
-          console.log(`Detected approximately ${moduleCount} modules in the project`);
-
           // Prompt user if module count is high
           if (moduleCount > 1000) {
             const response = await vscode.window.showWarningMessage(
               `This project contains approximately ${moduleCount} modules, which may cause performance issues or visualization errors.`,
-              'Continue Anyway', 'Focus on Module', 'Cancel'
+              'Continue Anyway', 'Focus on Module', 'Show Unused Modules', 'Cancel'
             );
 
             if (response === 'Focus on Module') {
               // User chose to focus on a specific module
               await vscode.commands.executeCommand(FOCUS_MODULE_DEPENDENCIES);
+              return;
+            } else if (response === 'Show Unused Modules') {
+              // User chose to show unused modules
+              await vscode.commands.executeCommand(SHOW_UNUSED_MODULES);
               return;
             } else if (response !== 'Continue Anyway') {
               // User chose to cancel
@@ -307,7 +316,7 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
             if (token.isCancellationRequested) { return; }
 
             if (dotOutput) {
-              showDotGraphWebview(context, dotOutput, focusOnModule, moduleName);
+              showDotGraphWebview(context, dotOutput, focusOnModule, moduleName, showUnusedModules);
               return;
             }
           }
@@ -318,15 +327,21 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
       }
 
       // Run the CLI command with the determined bsDir and moduleName (if applicable)
-      progress.report({ message: 'Running rescriptdep CLI...' });
+      progress.report({ message: showUnusedModules ? 'Finding unused modules...' : 'Running dependency analysis...' });
       if (token.isCancellationRequested) { return; }
 
-      // Define CLI arguments - Use DOT format instead of JSON for better performance
-      const args: string[] = ['--format=dot'];
+      // Define CLI arguments based on the analysis type
+      let args: string[];
 
-      // Add module focus if specified
-      if (moduleName) {
-        args.push('--module', moduleName);
+      if (showUnusedModules) {
+        // 1. Unused modules analysis
+        args = ['--format=dot', '--no-dependents'];
+      } else if (focusOnModule) {
+        // 2. Focus on specific module
+        args = ['--format=dot', '--module', moduleName!];
+      } else {
+        // 3. Full dependency graph
+        args = ['--format=dot'];
       }
 
       // Add bsDir target
@@ -340,7 +355,7 @@ async function generateDependencyGraph(context: vscode.ExtensionContext, focusOn
       if (token.isCancellationRequested) { return; }
 
       if (dotContent) {
-        showDotGraphWebview(context, dotContent, focusOnModule, moduleName);
+        showDotGraphWebview(context, dotContent, focusOnModule, moduleName, showUnusedModules);
       } else {
         vscode.window.showErrorMessage('Failed to generate dependency visualization (CLI returned no content).');
       }
@@ -481,7 +496,6 @@ async function runRescriptDep(cliPath: string, args: string[], context?: vscode.
       cpuLimitedArgs = [command, ...args];
       cpuLimitedCommand = 'nice';
     }
-    // Note: Windows doesn't have a simple equivalent to 'nice' via command line
 
     cp.execFile(cpuLimitedCommand, cpuLimitedArgs, options, (error, stdout, stderr) => {
       if (error) {
@@ -513,7 +527,7 @@ async function runRescriptDep(cliPath: string, args: string[], context?: vscode.
 }
 
 // Function to display DOT format graph in webview
-function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: string, isFocusedMode: boolean = false, centerModuleName?: string) {
+function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: string, isFocusedMode: boolean = false, centerModuleName?: string, isUnusedModulesMode: boolean = false) {
   // Save current state to global variables
   currentDotContent = dotContent;
   currentIsFocusedMode = isFocusedMode;
@@ -780,6 +794,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             /* These variables will be assigned at runtime based on theme */
             --dependents-color: lightblue;
             --dependencies-color: lightcoral;
+            --unused-color: #ff6666;
         }
         
         /* Dark theme arrow colors */
@@ -896,13 +911,17 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
 <body class="${isDarkTheme ? 'vscode-dark' : 'vscode-light'}">
     <div class="top-controls-wrapper">
         <div class="legend">
-            <div class="legend-item">
+            <div class="legend-item" id="dependents-legend" style="display: none;">
                 <div class="legend-line" style="background-color: var(--dependents-color, lightblue);"></div>
                 <span>Dependents (modules that use the center module)</span>
             </div>
-            <div class="legend-item">
+            <div class="legend-item" id="dependencies-legend" style="display: none;">
                 <div class="legend-line" style="background-color: var(--dependencies-color, lightcoral);"></div>
                 <span>Dependencies (modules used by the center module)</span>
+            </div>
+            <div class="legend-item" id="unused-modules-legend" style="display: none;">
+                <div class="legend-line" style="background-color: var(--unused-color, #ff6666);"></div>
+                <span>Modules with no dependents (unused modules)</span>
             </div>
         </div>
         <div class="search-container">
@@ -938,6 +957,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         let dotSrc = '';
         let isFocusedMode = false;
         let centerModule = null;
+        let isUnusedModulesMode = false;
         let allModuleNodes = []; // Store all available module names
         
         // Theme-related variables - detect theme from body class during initialization
@@ -946,6 +966,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
         // Set colors based on theme
         document.documentElement.style.setProperty('--dependents-color', isDarkTheme ? 'steelblue' : 'lightblue');
         document.documentElement.style.setProperty('--dependencies-color', isDarkTheme ? 'indianred' : 'lightcoral');
+        document.documentElement.style.setProperty('--unused-color', '#ff6666');
         
         // Function to update SVG styles to match the theme
         function updateSvgStylesForTheme(svg, isDark) {
@@ -1095,6 +1116,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             // Update theme-based color settings
             document.documentElement.style.setProperty('--dependents-color', isDarkTheme ? 'steelblue' : 'lightblue');
             document.documentElement.style.setProperty('--dependencies-color', isDarkTheme ? 'indianred' : 'lightcoral');
+            document.documentElement.style.setProperty('--unused-color', '#ff6666');
             
             // Directly set body background color
             document.body.style.backgroundColor = isDarkTheme ? '#1e1e1e' : '#ffffff';
@@ -1152,13 +1174,22 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 
                 // Direct SVG modification - change all node background colors
                 const nodeRects = svgElement.querySelectorAll('.node rect, .node polygon');
-                const bgColor = isDarkTheme ? '#1e1e1e' : '#f0f0f0';
+                
+                // Base colors based on theme
+                const standardBgColor = isDarkTheme ? '#1e1e1e' : '#f0f0f0';
+                const unusedModulesBgColor = isDarkTheme ? '#4b1d1d' : '#ffeeee'; // Reddish background
+                
+                // Choose color based on mode
+                const bgColor = isUnusedModulesMode ? unusedModulesBgColor : standardBgColor;
                 
                 nodeRects.forEach(rect => {
                     rect.setAttribute('fill', bgColor);
                     // Also set border clearly
-                    rect.setAttribute('stroke', isDarkTheme ? '#aaaaaa' : '#666666');
-                    rect.setAttribute('stroke-width', '1px');
+                    const borderColor = isUnusedModulesMode ? 
+                                      (isDarkTheme ? '#cc6666' : '#cc6666') : 
+                                      (isDarkTheme ? '#aaaaaa' : '#666666');
+                    rect.setAttribute('stroke', borderColor);
+                    rect.setAttribute('stroke-width', isUnusedModulesMode ? '1.5px' : '1px');
                     // Add rounded corners
                     if (rect.tagName.toLowerCase() === 'rect') {
                         rect.setAttribute('rx', '4');
@@ -1382,8 +1413,8 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 const moduleName = titleEl.textContent.trim();
                 if (!moduleName) return;
                 
-                // Check if this is the center module
-                if (centerModule && moduleName === centerModule) {
+                // Check if this is the center module (only in focused mode)
+                if (isFocusedMode && centerModule && moduleName === centerModule) {
                     // Only apply click prevention style to center module
                     node.style.cursor = 'default';
                     
@@ -1841,6 +1872,10 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 dotSrc = message.dotContent;
                 isFocusedMode = message.isFocusedMode;
                 centerModule = message.centerModule;
+                isUnusedModulesMode = message.isUnusedModulesMode || false;
+                
+                // Update legend display based on mode
+                updateLegendDisplay();
                 
                 // Now that we have data, render the graph
                 renderGraph();
@@ -1852,6 +1887,10 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                 dotSrc = message.dotContent;
                 isFocusedMode = message.isFocusedMode;
                 centerModule = message.centerModule;
+                isUnusedModulesMode = message.isUnusedModulesMode || false;
+                
+                // Update legend display based on mode
+                updateLegendDisplay();
                 
                 // Clear search input when graph is redrawn
                 const searchInput = document.getElementById('module-search');
@@ -1885,6 +1924,7 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
                     isDarkTheme ? 'steelblue' : 'lightblue');
                 document.documentElement.style.setProperty('--dependencies-color', 
                     isDarkTheme ? 'indianred' : 'lightcoral');
+                document.documentElement.style.setProperty('--unused-color', '#ff6666');
                 
                 // Update class of document
                 if (isDarkTheme) {
@@ -1927,6 +1967,32 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             }
         });
         
+        // Function to update legend display based on current mode
+        function updateLegendDisplay() {
+            const dependentsLegend = document.getElementById('dependents-legend');
+            const dependenciesLegend = document.getElementById('dependencies-legend');
+            const unusedModulesLegend = document.getElementById('unused-modules-legend');
+            
+            if (!dependentsLegend || !dependenciesLegend || !unusedModulesLegend) return;
+            
+            if (isUnusedModulesMode) {
+                // Show only unused modules legend in unused modules mode
+                dependentsLegend.style.display = 'none';
+                dependenciesLegend.style.display = 'none';
+                unusedModulesLegend.style.display = 'flex';
+            } else if (isFocusedMode) {
+                // Show both legends in focused mode
+                dependentsLegend.style.display = 'flex';
+                dependenciesLegend.style.display = 'flex';
+                unusedModulesLegend.style.display = 'none';
+            } else {
+                // Show no legend in regular mode
+                dependentsLegend.style.display = 'none';
+                dependenciesLegend.style.display = 'none';
+                unusedModulesLegend.style.display = 'none';
+            }
+        }
+        
         // Notify VS Code that webview is ready
         vscode.postMessage({ command: 'webviewReady' });
     </script>
@@ -1937,7 +2003,16 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
   if (currentPanel) {
     // If we already have a panel, just update its html
     currentPanel.webview.html = htmlContent;
-    currentPanel.title = isFocusedMode && centerModuleName ? `Module: ${centerModuleName} Dependencies` : 'ReScript Dependencies';
+
+    // Set appropriate title based on mode
+    if (isUnusedModulesMode) {
+      currentPanel.title = 'ReScript: Unused Modules';
+    } else if (isFocusedMode && centerModuleName) {
+      currentPanel.title = `Module: ${centerModuleName} Dependencies`;
+    } else {
+      currentPanel.title = 'ReScript Dependencies';
+    }
+
     currentPanel.reveal(vscode.ViewColumn.One);
 
     // Send the graph data after the webview is loaded
@@ -1948,7 +2023,8 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             command: 'initGraph',
             dotContent: themedDotContent,
             isFocusedMode: isFocusedMode,
-            centerModule: centerModuleName
+            centerModule: centerModuleName,
+            isUnusedModulesMode: isUnusedModulesMode
           });
         }
       }
@@ -1957,7 +2033,8 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
     // Create a new panel
     currentPanel = vscode.window.createWebviewPanel(
       'bibimbobVisualizer',
-      isFocusedMode && centerModuleName ? `Module: ${centerModuleName} Dependencies` : 'ReScript Dependencies',
+      isUnusedModulesMode ? 'ReScript: Unused Modules' :
+        (isFocusedMode && centerModuleName ? `Module: ${centerModuleName} Dependencies` : 'ReScript Dependencies'),
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -1982,7 +2059,8 @@ function showDotGraphWebview(context: vscode.ExtensionContext, dotContent: strin
             command: 'initGraph',
             dotContent: themedDotContent,
             isFocusedMode: isFocusedMode,
-            centerModule: centerModuleName
+            centerModule: centerModuleName,
+            isUnusedModulesMode: isUnusedModulesMode
           });
         }
       }

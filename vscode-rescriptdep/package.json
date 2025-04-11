@@ -38,6 +38,10 @@
       {
         "command": "bibimbob.focusModuleDependencies",
         "title": "Bibimbob: Focus On Module Dependencies"
+      },
+      {
+        "command": "bibimbob.showUnusedModules",
+        "title": "Bibimbob: Show Unused Modules"
       }
     ]
   },
