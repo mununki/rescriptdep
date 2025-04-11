@@ -421,6 +421,26 @@ and output_json graph out_channel =
   (* JSON closing *)
   output_string out_channel "}\n"
 
+(* Output modules with no dependents *)
+let output_no_dependents_dot modules out_channel =
+  output_string out_channel "digraph G {\n";
+  output_string out_channel "  rankdir=LR;\n";
+  output_string out_channel "  node [shape=box];\n";
+  List.iter
+    (fun m -> output_string out_channel (Printf.sprintf "  \"%s\";\n" m))
+    modules;
+  output_string out_channel "}\n"
+
+let output_no_dependents_json modules out_channel =
+  let json = `List (List.map (fun m -> `String m) modules) in
+  Yojson.Basic.pretty_to_channel out_channel json
+
+let output_no_dependents format graph out_channel =
+  let modules = Dependency_graph.find_modules_with_no_dependents graph in
+  match format with
+  | Dot -> output_no_dependents_dot modules out_channel
+  | Json -> output_no_dependents_json modules out_channel
+
 (* String representation of a format *)
 let format_to_string = function Dot -> "dot" | Json -> "json"
 

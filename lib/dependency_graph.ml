@@ -330,3 +330,8 @@ let create_focused_graph graph center_module =
     in
 
     result
+
+(* Find modules with no dependents *)
+let find_modules_with_no_dependents graph =
+  let modules = get_modules graph in
+  List.filter (fun m -> find_dependents graph m = []) modules

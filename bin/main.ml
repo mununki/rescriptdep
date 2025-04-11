@@ -8,6 +8,7 @@ let verbose = ref false
 let benchmark = ref false
 let skip_cache = ref false
 let clear_cache = ref false
+let no_dependents = ref false
 
 let spec_list =
   [
@@ -51,6 +52,12 @@ let spec_list =
     ( "--clear-cache",
       Arg.Set clear_cache,
       "Clear the in-memory cache before analyzing" );
+    ( "--no-dependents",
+      Arg.Set no_dependents,
+      "Output modules with no dependents" );
+    ( "-nd",
+      Arg.Set no_dependents,
+      "Output modules with no dependents (short for --no-dependents)" );
   ]
 
 let anon_fun file = input_files := file :: !input_files
@@ -142,12 +149,19 @@ let main () =
         (* Output to file only *)
         if !verbose then Printf.eprintf "Writing output to file: %s\n" file;
         let out_channel = open_out file in
-        Rescriptdep.Formatter.output_graph !format focused_graph out_channel;
+        if !no_dependents then
+          Rescriptdep.Formatter.output_no_dependents !format focused_graph
+            out_channel
+        else
+          Rescriptdep.Formatter.output_graph !format focused_graph out_channel;
         close_out out_channel
     | None ->
         (* Output to stdout when no file output option is provided *)
         if !verbose then Printf.eprintf "Writing output to stdout\n";
-        Rescriptdep.Formatter.output_graph !format focused_graph stdout);
+        if !no_dependents then
+          Rescriptdep.Formatter.output_no_dependents !format focused_graph
+            stdout
+        else Rescriptdep.Formatter.output_graph !format focused_graph stdout);
 
     let output_end_time = Unix.gettimeofday () in
     let output_time = output_end_time -. output_start_time in
