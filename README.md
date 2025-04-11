@@ -39,6 +39,7 @@ rescriptdep [options] files_or_dirs
 # --no-cache              : Skip using cache
 # --cache-file <file>     : Specify cache file location
 # --clear-cache           : Clear the cache before analyzing
+# -nd, --no-dependents    : Exclude reverse dependencies (modules that depend on the target)
 ```
 
 ## Development

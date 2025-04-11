@@ -72,6 +72,10 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
+### 0.7.0
+
+- Added new command "ReScript: Show Unused Modules" to display modules without dependents
+
 ### 0.6.0
 
 - Improved dependency graph rendering with optimized layout algorithms
