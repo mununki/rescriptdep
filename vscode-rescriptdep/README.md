@@ -34,17 +34,6 @@ This extension provides several commands in the Command Palette (`Ctrl+Shift+P` 
 - **ReScript: Show Unused Modules**: Identifies and visualizes modules that have no dependents (potentially unused code)
 - **ReScript: Clear Dependency Cache**: Clears the cached dependency data for improved accuracy after major changes
 
-## Cache Management
-
-The extension uses a caching mechanism to improve performance when analyzing module dependencies:
-
-- Cache files are stored in the extension's global storage area:
-  - macOS: `~/Library/Application Support/Code/User/globalStorage/mununki.vscode-bibimbob/cache`
-  - Linux: `~/.config/Code/User/globalStorage/mununki.vscode-bibimbob/cache`
-- Each workspace gets its own cache file based on the workspace name
-- The cache is automatically invalidated when module files change (using digest comparison)
-- You can manually clear the cache using the "ReScript: Clear Dependency Cache" command
-
 ## Requirements
 
 - A ReScript project (with either `bsconfig.json` or `rescript.json` configuration file)
@@ -59,9 +48,8 @@ The extension uses a caching mechanism to improve performance when analyzing mod
 
 ## Usage Tips
 
-1. **First Analysis**: The first analysis might take longer as it builds the initial cache
-2. **After Major Changes**: Clear the cache using the command if you've made significant changes to your codebase
-3. **Module Navigation**: Click on any module in the visualization to focus on that module
+1. **After Major Changes**: When making significant changes to your codebase (including module deletion), run `rescript clean` to recompile your project for improved analysis accuracy
+2. **Module Navigation**: Click on any module in the visualization to focus on that module
 
 ## Extension Settings
 
