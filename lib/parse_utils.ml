@@ -1,8 +1,6 @@
 (* Utility functions for path resolution *)
 
 open Stdlib
-open Str (* For regex functions *)
-open Yojson.Basic.Util (* For JSON parsing functions *)
 
 (* Normalize module name to ensure consistent casing *)
 let normalize_module_name name =

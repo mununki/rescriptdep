@@ -1,6 +1,5 @@
 open Stdlib
 open Parse_utils
-open Eio.Std
 
 (* Module info representation *)
 type module_info = {
@@ -31,13 +30,13 @@ module Cache = struct
   let ast_dependency_cache_mutex = Eio.Mutex.create ()
 
   (* Initialize the cache - simplified to just return false as we don't load from disk anymore *)
-  let initialize ?(verbose = false) ?(skip_cache = false) () =
+  let initialize ?(verbose = false) () =
     if verbose then
       Printf.printf "File-based caching is disabled, using only memory cache\n";
     false
 
   (* Save the cache - simplified to just return false as we don't save to disk anymore *)
-  let save ?(verbose = false) ?(skip_cache = false) () =
+  let save ?(verbose = false) () =
     if verbose then
       Printf.printf "File-based caching is disabled, not saving cache to disk\n";
     false
@@ -237,10 +236,10 @@ module DependencyExtractor = struct
     | Path.Pident id ->
         (* In our simplified Path module, Pident only contains a string *)
         id
-    | Path.Pdot (p, s, _) ->
+    | Path.Pdot (_, s, _) ->
         (* For Pdot, extract just the name part *)
         s
-    | Path.Papply (p1, p2) ->
+    | Path.Papply (p1, _) ->
         (* For path applications, we'll use the first path *)
         extract_module_from_path p1
 
@@ -859,7 +858,7 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
            (Printf.sprintf "Error parsing %s: %s" path (Printexc.to_string e)))
 
 (* Get the list of all project modules using recursive scanning *)
-let get_project_modules ?(verbose = false) paths =
+let get_project_modules paths =
   let project_modules = ref [] in
   let visited_dirs = Hashtbl.create 50 in
 
@@ -933,7 +932,7 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
   bench_checkpoint "Parser started";
 
   (* Initialize the memory cache system - call is kept for compatibility *)
-  let _ = Cache.initialize ~verbose ~skip_cache () in
+  let _ = Cache.initialize ~verbose () in
   bench_checkpoint "Memory cache setup completed";
 
   (* Collect all cmt files *)
@@ -958,7 +957,7 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
 
   (* First get the list of all project modules (recursively) *)
   bench_checkpoint "Start collecting project modules";
-  let project_modules = get_project_modules ~verbose paths in
+  let project_modules = get_project_modules paths in
   bench_checkpoint
     (Printf.sprintf "Collected %d project modules"
        (List.length project_modules));

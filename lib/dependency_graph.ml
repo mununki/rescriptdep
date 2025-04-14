@@ -103,7 +103,7 @@ let find_all_cycles graph =
       let cycle =
         let rec take_until n = function
           | [] -> []
-          | x :: _ when n = 0 -> []
+          | _ :: _ when n = 0 -> []
           | x :: xs -> x :: take_until (n - 1) xs
         in
         module_name :: take_until cycle_start path |> List.rev

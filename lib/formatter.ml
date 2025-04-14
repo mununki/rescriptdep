@@ -3,7 +3,6 @@
    in various formats like DOT graphs and JSON. *)
 
 open Stdlib
-open Parse_utils
 
 (* Output format types *)
 type format =

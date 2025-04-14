@@ -1,7 +1,5 @@
 (library
  (name rescriptdep)
- (flags
-  (:standard -w -27-32-33-34-37-39-50-52))
  (public_name rescriptdep)
  (modules parse_utils parser formatter dependency_graph)
  (libraries str unix vendor eio eio_main yojson))
