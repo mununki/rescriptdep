@@ -7,12 +7,22 @@ A Visual Studio Code extension for visualizing dependencies between ReScript mod
 - **Full Dependency Graph Visualization**: View the complete dependency graph of your ReScript project
 - **Module-Focused Views**: Focus on a specific module and see its direct dependencies and dependents
 - **Unused Module Detection**: Identify modules that have no dependents to help locate potential dead code
+
 - **Interactive Graph**: Click on modules to navigate through dependencies
+- **Value Usage Count**: See how many times each let binding is used, directly in the editor
 - **High Performance**: Uses digest-based caching to improve performance for large projects
 
 <div style="display: flex; justify-content: space-between;">
   <img src="https://github.com/mununki/rescriptdep/raw/main/vscode-rescriptdep/images/rescriptdep_screenshot_0.png" alt="ReScript Dependency Visualization" width="49%">
   <img src="https://github.com/mununki/rescriptdep/raw/main/vscode-rescriptdep/images/rescriptdep_screenshot_1.png" alt="Module Dependency View" width="49%">
+</div>
+
+## Value Usage Count Annotation
+
+This extension also shows how many times each value (e.g., a function or let binding) is used across your project. When you place your cursor on a `let ... =` declaration in a `.res` file, an inline annotation will appear at the end of the line, such as `Used 0 times`. This helps you quickly identify unused or rarely used values.
+
+<div align="center">
+  <img src="https://github.com/mununki/rescriptdep/raw/main/vscode-rescriptdep/images/rescriptdep_screenshot_2.png" alt="Value Usage Count Annotation" width="60%">
 </div>
 
 ## Platform Support
@@ -61,6 +71,10 @@ This extension doesn't require any specific settings.
 - Please report any issues on the GitHub repository
 
 ## Release Notes
+
+### 0.8.0
+
+- Show value usage count as an inline annotation for let bindings.
 
 ### 0.7.0
 
