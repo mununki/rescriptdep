@@ -287,7 +287,10 @@ let create_focused_graph graph center_module =
     let center_deps = get_dependencies graph center_module in
 
     (* 2. Get modules that depend on the center module (its dependents) *)
-    let dependents = find_dependents graph center_module in
+    let dependents =
+      List.sort_uniq String.compare
+        (center_module :: find_dependents graph center_module)
+    in
 
     (* 3. Start building a new graph with just the center module *)
     (* Preserve metadata - add center module *)
@@ -340,7 +343,10 @@ let find_modules_with_no_dependents graph =
 let count_value_usage_in_dependents graph ~module_name ~value_name =
   let open Stdlib in
   let open Cmt_format in
-  let dependents = find_dependents graph module_name in
+  let dependents =
+    List.sort_uniq String.compare
+      (module_name :: find_dependents graph module_name)
+  in
   let find_cmt_path file_path =
     let cmt_path =
       Parser.DependencyExtractor.get_cmt_path_for_source file_path
