@@ -13,15 +13,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Access paths *)
+type t = { stamp : int; name : string; mutable flags : int }
 
-(* Path representation for the ReScript compiler *)
-
-type t = Pident of Ident.t | Pdot of t * string * int | Papply of t * t
-
-val same : t -> t -> bool
-val compare : t -> t -> int
-val name : ?paren:(string -> bool) -> t -> string
-val binding_time : t -> int
-val isfree : Ident.t -> t -> bool
-val head : t -> Ident.t
+let name i = i.name

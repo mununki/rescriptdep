@@ -6,11 +6,22 @@ var Comp0 = require("./comp0.bs.js");
 var Logger = require("./logger.bs.js");
 var JsxRuntime = require("react/jsx-runtime");
 
-function run() {
-  var result = $$Math.square(5);
-  Logger.log("Result: " + String(result));
+function App$M(props) {
   return JsxRuntime.jsx(Comp0.make, {});
 }
 
+var M = {
+  make: App$M
+};
+
+function run() {
+  var result = $$Math.square(5);
+  Logger.log("Result: " + String(result));
+  return JsxRuntime.jsx(App$M, {
+              p: 10
+            });
+}
+
+exports.M = M;
 exports.run = run;
 /* Comp0 Not a pure module */

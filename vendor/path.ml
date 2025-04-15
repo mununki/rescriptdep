@@ -1,6 +1,21 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
 (* Path representation for the ReScript compiler *)
 
-type t = Pident of string | Pdot of t * string * int | Papply of t * t
+type t = Pident of Ident.t | Pdot of t * string * int | Papply of t * t
 
 let rec same p1 p2 =
   match (p1, p2) with
@@ -24,11 +39,14 @@ let rec compare p1 p2 =
       let c = compare fun1 fun2 in
       if c <> 0 then c else compare arg1 arg2
 
+let kfalse _ = false
+
 (* For printing *)
-let rec name = function
-  | Pident s -> s
-  | Pdot (_, s, _) -> s
-  | Papply (p1, p2) -> name p1 ^ "(" ^ name p2 ^ ")"
+let rec name ?(paren = kfalse) = function
+  | Pident id -> Ident.name id
+  | Pdot (p, s, _pos) ->
+      name ~paren p ^ if paren s then ".( " ^ s ^ " )" else "." ^ s
+  | Papply (p1, p2) -> name ~paren p1 ^ "(" ^ name ~paren p2 ^ ")"
 
 let rec binding_time = function
   | Pident _ -> 0

@@ -13,15 +13,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Access paths *)
+(** Auxiliary AST types used by parsetree and typedtree. *)
 
-(* Path representation for the ReScript compiler *)
-
-type t = Pident of Ident.t | Pdot of t * string * int | Papply of t * t
-
-val same : t -> t -> bool
-val compare : t -> t -> int
-val name : ?paren:(string -> bool) -> t -> string
-val binding_time : t -> int
-val isfree : Ident.t -> t -> bool
-val head : t -> Ident.t
+type 'a loc = 'a Location.loc = { txt : 'a; loc : Location.t }

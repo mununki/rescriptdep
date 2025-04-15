@@ -454,3 +454,29 @@ let all_formats = [ Dot; Json ]
 
 (* Get the default format *)
 let default_format = Dot
+
+let output_value_usage_dot usage_list out_channel =
+  output_string out_channel "digraph {\n";
+  List.iter
+    (fun (name, count) ->
+      Printf.fprintf out_channel "  \"%s\" [label=\"%s\\ncount: %d\"]\n" name
+        name count)
+    usage_list;
+  output_string out_channel "}\n"
+
+let output_value_usage_json usage_list out_channel =
+  output_string out_channel "{\n";
+  output_string out_channel "  \"modules\": [\n";
+  List.iteri
+    (fun i (name, count) ->
+      Printf.fprintf out_channel "    { \"name\": \"%s\", \"count\": %d }%s\n"
+        name count
+        (if i = List.length usage_list - 1 then "" else ","))
+    usage_list;
+  output_string out_channel "  ]\n";
+  output_string out_channel "}\n"
+
+let output_value_usage format usage_list out_channel =
+  match format with
+  | Dot -> output_value_usage_dot usage_list out_channel
+  | Json -> output_value_usage_json usage_list out_channel

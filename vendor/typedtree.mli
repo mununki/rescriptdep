@@ -1,4 +1,19 @@
-(* Typedtree: OCaml frontend in typed representation *)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                                                                        *)
+(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+(** Abstract syntax tree after typing *)
 
 (* Type expressions for the core language *)
 
@@ -120,11 +135,11 @@ and value_binding = {
 }
 
 and module_binding = {
-  mb_id : string; (* Ident.t; *)
-  mb_name : string; (* Location.t; *)
+  mb_id : Ident.t;
+  mb_name : string Asttypes.loc;
   mb_expr : module_expr;
   mb_attributes : string; (* Parsetree.attributes; *)
-  mb_loc : unit; (* Location.t; *)
+  mb_loc : Location.t; (* Location.t; *)
 }
 
 and module_coercion =

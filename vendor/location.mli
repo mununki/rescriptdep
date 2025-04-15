@@ -13,15 +13,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Access paths *)
+(** Source code locations (ranges of positions), used in parsetree. *)
 
-(* Path representation for the ReScript compiler *)
-
-type t = Pident of Ident.t | Pdot of t * string * int | Papply of t * t
-
-val same : t -> t -> bool
-val compare : t -> t -> int
-val name : ?paren:(string -> bool) -> t -> string
-val binding_time : t -> int
-val isfree : Ident.t -> t -> bool
-val head : t -> Ident.t
+type t = Warnings.loc = { loc_start : int; loc_end : int; loc_ghost : bool }
+type 'a loc = { txt : 'a; loc : t }

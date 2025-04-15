@@ -3,4 +3,5 @@
  (public_name rescriptdep.vendor)
  (wrapped false)
  (flags
-  (:standard -w -32-33-34-37-39-50-52)))
+  (:standard -w -32-33-34-37-39-50-52))
+ (modules_without_implementation asttypes))

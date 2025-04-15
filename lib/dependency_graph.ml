@@ -335,3 +335,216 @@ let create_focused_graph graph center_module =
 let find_modules_with_no_dependents graph =
   let modules = get_modules graph in
   List.filter (fun m -> find_dependents graph m = []) modules
+
+(* Count value usage in dependents of a module *)
+let count_value_usage_in_dependents graph ~module_name ~value_name =
+  let open Stdlib in
+  let open Cmt_format in
+  let dependents = find_dependents graph module_name in
+  let find_cmt_path file_path =
+    let cmt_path =
+      Parser.DependencyExtractor.get_cmt_path_for_source file_path
+    in
+    if Sys.file_exists cmt_path then Some cmt_path else None
+  in
+  let rec get_head_module_name path =
+    match path with
+    | Path.Pident id -> Ident.name id
+    | Path.Pdot (p, _, _) -> get_head_module_name p
+    | _ -> Path.name path
+  in
+  let rec count_in_expression value_name module_name open_modules current_module
+      expr =
+    match expr.Typedtree.exp_desc with
+    | Typedtree.Texp_ident (path, _, _) -> (
+        match path with
+        | Path.Pident id ->
+            if
+              Ident.name id = value_name
+              && (List.mem module_name open_modules
+                 || current_module = module_name)
+            then 1
+            else 0
+        | Path.Pdot (p, id, _) ->
+            if id = value_name && get_head_module_name p = module_name then 1
+            else 0
+        | _ -> 0)
+    | Typedtree.Texp_let (_, vbs, e) ->
+        List.fold_left
+          (fun acc vb ->
+            acc
+            + count_in_expression value_name module_name open_modules
+                current_module vb.Typedtree.vb_expr)
+          (count_in_expression value_name module_name open_modules
+             current_module e)
+          vbs
+    | Typedtree.Texp_function { cases; _ } ->
+        List.fold_left
+          (fun acc c ->
+            acc
+            + count_in_expression value_name module_name open_modules
+                current_module c.Typedtree.c_rhs)
+          0 cases
+    | Typedtree.Texp_apply (e, args) ->
+        List.fold_left
+          (fun acc (_, eo) ->
+            acc
+            +
+            match eo with
+            | Some e ->
+                count_in_expression value_name module_name open_modules
+                  current_module e
+            | None -> 0)
+          (count_in_expression value_name module_name open_modules
+             current_module e)
+          args
+    | Typedtree.Texp_match (e, cases, cases2, _) ->
+        count_in_expression value_name module_name open_modules current_module e
+        + List.fold_left
+            (fun acc c ->
+              acc
+              + count_in_expression value_name module_name open_modules
+                  current_module c.Typedtree.c_rhs)
+            0 (cases @ cases2)
+    | Typedtree.Texp_tuple elist | Typedtree.Texp_array elist ->
+        List.fold_left
+          (fun acc e ->
+            acc
+            + count_in_expression value_name module_name open_modules
+                current_module e)
+          0 elist
+    | Typedtree.Texp_construct (_, _, elist) ->
+        List.fold_left
+          (fun acc e ->
+            acc
+            + count_in_expression value_name module_name open_modules
+                current_module e)
+          0 elist
+    | Typedtree.Texp_variant (_, eo) -> (
+        match eo with
+        | Some e ->
+            count_in_expression value_name module_name open_modules
+              current_module e
+        | None -> 0)
+    | Typedtree.Texp_record { fields; extended_expression; _ } -> (
+        let acc =
+          Array.fold_left
+            (fun acc (_, fld) ->
+              match fld with
+              | Typedtree.Overridden (_, e) ->
+                  acc
+                  + count_in_expression value_name module_name open_modules
+                      current_module e
+              | Typedtree.Kept _ -> acc)
+            0 fields
+        in
+        match extended_expression with
+        | Some e ->
+            acc
+            + count_in_expression value_name module_name open_modules
+                current_module e
+        | None -> acc)
+    | Typedtree.Texp_field (e, _, _) ->
+        count_in_expression value_name module_name open_modules current_module e
+    | Typedtree.Texp_setfield (e1, _, _, e2) ->
+        count_in_expression value_name module_name open_modules current_module
+          e1
+        + count_in_expression value_name module_name open_modules current_module
+            e2
+    | Typedtree.Texp_ifthenelse (e1, e2, eo) -> (
+        count_in_expression value_name module_name open_modules current_module
+          e1
+        + count_in_expression value_name module_name open_modules current_module
+            e2
+        +
+        match eo with
+        | Some e ->
+            count_in_expression value_name module_name open_modules
+              current_module e
+        | None -> 0)
+    | Typedtree.Texp_sequence (e1, e2) ->
+        count_in_expression value_name module_name open_modules current_module
+          e1
+        + count_in_expression value_name module_name open_modules current_module
+            e2
+    | Typedtree.Texp_while (e1, e2) ->
+        count_in_expression value_name module_name open_modules current_module
+          e1
+        + count_in_expression value_name module_name open_modules current_module
+            e2
+    | Typedtree.Texp_for (_, _, e1, e2, _, e3) ->
+        count_in_expression value_name module_name open_modules current_module
+          e1
+        + count_in_expression value_name module_name open_modules current_module
+            e2
+        + count_in_expression value_name module_name open_modules current_module
+            e3
+    | Typedtree.Texp_send (e, _, eo) -> (
+        count_in_expression value_name module_name open_modules current_module e
+        +
+        match eo with
+        | Some e ->
+            count_in_expression value_name module_name open_modules
+              current_module e
+        | None -> 0)
+    | Typedtree.Texp_open (open_decl, e) ->
+        let open_mod =
+          match open_decl.open_expr.mod_desc with
+          | Typedtree.Tmod_ident (path, _) -> Path.name path
+          | _ -> ""
+        in
+        count_in_expression value_name module_name (open_mod :: open_modules)
+          current_module e
+    | _ -> 0
+  in
+  let rec count_in_structure value_name module_name current_module structure =
+    List.fold_left
+      (fun acc item ->
+        match item.Typedtree.str_desc with
+        | Typedtree.Tstr_value (_, vbs) ->
+            acc
+            + List.fold_left
+                (fun acc vb ->
+                  acc
+                  + count_in_expression value_name module_name [] current_module
+                      vb.Typedtree.vb_expr)
+                0 vbs
+        | Typedtree.Tstr_eval (e, _) ->
+            acc + count_in_expression value_name module_name [] current_module e
+        | Typedtree.Tstr_module { mb_expr = { mod_desc; _ }; _ } -> (
+            match mod_desc with
+            | Typedtree.Tmod_structure s ->
+                acc + count_in_structure value_name module_name current_module s
+            | Typedtree.Tmod_constraint (mexpr, _, _, _) -> (
+                match mexpr.mod_desc with
+                | Typedtree.Tmod_structure s ->
+                    acc
+                    + count_in_structure value_name module_name current_module s
+                | _ -> acc)
+            | _ -> acc)
+        | _ -> acc)
+      0 structure.Typedtree.str_items
+  in
+  List.map
+    (fun dep ->
+      let file_path_opt = get_module_path graph dep in
+      if Option.is_some file_path_opt then
+        let file_path = Option.get file_path_opt in
+        let cmt_path_opt = find_cmt_path file_path in
+        if Option.is_some cmt_path_opt then
+          let cmt_path = Option.get cmt_path_opt in
+          try
+            let cmt_info = Cmt_format.read_cmt cmt_path in
+            match cmt_info.cmt_annots with
+            | Implementation structure ->
+                let count =
+                  count_in_structure value_name module_name dep structure
+                in
+                (dep, count)
+            | _ -> (dep, -2)
+            (* -2: No implementation AST *)
+          with _ -> (dep, -3) (* -3: CMT read error *)
+        else (dep, -4) (* -4: No .cmt file found *)
+      else (dep, -5)
+      (* -5: No file path found *))
+    dependents

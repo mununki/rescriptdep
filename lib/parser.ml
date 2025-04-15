@@ -235,7 +235,7 @@ module DependencyExtractor = struct
     match path with
     | Path.Pident id ->
         (* In our simplified Path module, Pident only contains a string *)
-        id
+        Ident.name id
     | Path.Pdot (_, s, _) ->
         (* For Pdot, extract just the name part *)
         s

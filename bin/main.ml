@@ -9,6 +9,7 @@ let benchmark = ref false
 let skip_cache = ref false
 let clear_cache = ref false
 let no_dependents = ref false
+let value_binding = ref None
 
 let spec_list =
   [
@@ -58,6 +59,14 @@ let spec_list =
     ( "-nd",
       Arg.Set no_dependents,
       "Output modules with no dependents (short for --no-dependents)" );
+    ( "-vb",
+      Arg.String (fun s -> value_binding := Some s),
+      "Analyze usage count of a value binding in dependents of the focused \
+       module" );
+    ( "--value-binding",
+      Arg.String (fun s -> value_binding := Some s),
+      "Analyze usage count of a value binding in dependents of the focused \
+       module" );
   ]
 
 let anon_fun file = input_files := file :: !input_files
@@ -113,7 +122,36 @@ let main () =
 
     time_checkpoint "Graph building completed";
 
-    (* Apply module focus if specified or filter standard modules *)
+    (* 3: If both -m and -vb are specified, only output value usage count *)
+    (match (!focus_module, !value_binding) with
+    | Some module_name, Some value_name ->
+        let normalized_name =
+          Rescriptdep.Parse_utils.normalize_module_name module_name
+        in
+        let focused_graph =
+          Rescriptdep.Dependency_graph.create_focused_graph graph
+            normalized_name
+        in
+        time_checkpoint "Module focusing completed";
+        let usage_list =
+          Rescriptdep.Dependency_graph.count_value_usage_in_dependents
+            focused_graph ~module_name:normalized_name ~value_name
+        in
+        let output_to =
+          match !output_file with
+          | Some file -> Some (open_out file)
+          | None -> None
+        in
+        (match output_to with
+        | Some ch ->
+            Rescriptdep.Formatter.output_value_usage !format usage_list ch;
+            close_out ch
+        | None ->
+            Rescriptdep.Formatter.output_value_usage !format usage_list stdout);
+        exit 0
+    | _ -> ());
+
+    (* 1,2: Graph output branch *)
     let focused_graph =
       match !focus_module with
       | Some module_name ->
@@ -127,7 +165,7 @@ let main () =
           time_checkpoint "Module focusing completed";
           result
       | None ->
-          (* When no focus module is specified, filter out standard modules *)
+          (* If no focus module is specified, filter out standard modules *)
           let filtered_graph =
             Rescriptdep.Dependency_graph.create_filtered_graph graph
           in
@@ -175,7 +213,6 @@ let main () =
     if !benchmark then (
       let total_time = Unix.gettimeofday () -. start_time in
       Printf.eprintf "[BENCH] Total execution time: %.4f seconds\n" total_time;
-
       exit 0)
   with
   | Rescriptdep.Parser.Invalid_cmt_file msg ->

@@ -11,6 +11,15 @@ function $$double(x) {
   return Utils.add(x, x);
 }
 
+function triple(x) {
+  return Utils.multiply(x, 3);
+}
+
+var M = {
+  triple: triple
+};
+
 exports.square = square;
 exports.$$double = $$double;
+exports.M = M;
 /* No side effect */
