@@ -39,6 +39,8 @@ rescriptdep [options] files_or_dirs
 # --no-cache              : Skip using cache
 # --clear-cache           : Clear the cache before analyzing
 # -nd, --no-dependents    : Find modules that have no dependents (not imported by any other modules)
+# -vb, --value-binding <name> : Count usage of a value binding (by name) across the project (in the module itself and all dependents; requires -m)
+# -vl, --value-line <line>    : Line number of the value binding (1-based, for disambiguation when multiple bindings have the same name; use with -vb)
 ```
 
 ## Development
