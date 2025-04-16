@@ -8,6 +8,7 @@ import * as os from 'os';
 const SHOW_DEPENDENCY_GRAPH = 'bibimbob.showDependencyGraph';
 const FOCUS_MODULE_DEPENDENCIES = 'bibimbob.focusModuleDependencies';
 const SHOW_UNUSED_MODULES = 'bibimbob.showUnusedModules';
+const TOGGLE_VALUE_USAGE_COUNT = 'bibimbob.toggleValueUsageCount';
 
 // Track the current webview panel
 let currentPanel: vscode.WebviewPanel | undefined = undefined;
@@ -38,7 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // Command to toggle value usage count display
-  let toggleValueUsageCountCommand = vscode.commands.registerCommand('bibimbob.toggleValueUsageCount', () => {
+  let toggleValueUsageCountCommand = vscode.commands.registerCommand(TOGGLE_VALUE_USAGE_COUNT, () => {
     isValueUsageCountEnabled = !isValueUsageCountEnabled;
     vscode.window.showInformationMessage(`Value usage count display is now ${isValueUsageCountEnabled ? 'enabled' : 'disabled'}.`);
     // Optionally trigger update/decorate here in later steps
@@ -48,19 +49,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(focusModuleCommand);
   context.subscriptions.push(unusedModulesCommand);
   context.subscriptions.push(toggleValueUsageCountCommand);
-
-  // Listen for .res file open or change events
-  vscode.workspace.onDidOpenTextDocument(async (document) => {
-    if (isValueUsageCountEnabled && document.languageId === 'rescript' && document.fileName.endsWith('.res')) {
-      await handleValueUsageCount(document);
-    }
-  });
-  vscode.workspace.onDidChangeTextDocument(async (event) => {
-    const document = event.document;
-    if (isValueUsageCountEnabled && document.languageId === 'rescript' && document.fileName.endsWith('.res')) {
-      await handleValueUsageCount(document);
-    }
-  });
 
   // Listen for cursor movement in .res files
   vscode.window.onDidChangeTextEditorSelection(async (event) => {
@@ -89,10 +77,10 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     if (match) {
-      const valueName = match[1];
-      console.log('[Bibimbob] Detected let declaration:', valueName);
+      // Extract only the let name to use as valueName
       const fileName = document.fileName;
       const moduleName = path.basename(fileName, '.res');
+      const valueName = match[1];
 
       // Find CLI path and bsDir
       const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -107,7 +95,9 @@ export function activate(context: vscode.ExtensionContext) {
       const bsDir = path.join(projectRoot, 'lib', 'bs');
 
       // Run CLI to get usage count (add -f dot flag)
-      const args = ['-m', moduleName, '-vb', valueName, '-f', 'dot', bsDir];
+      // Pass the line number of the let declaration as -vl <line> (1-based)
+      const lineNumber = position.line + 1;
+      const args = ['-m', moduleName, '-vb', valueName, '-vl', String(lineNumber), '-f', 'dot', bsDir];
       let usageCount = '?';
       try {
         console.log('[Bibimbob] Running CLI:', cliPath, args);
@@ -143,7 +133,7 @@ export function activate(context: vscode.ExtensionContext) {
         after: {
           contentText: decoText,
           color: '#b5cea8',
-          margin: '0 0 0 16px',
+          margin: '0 0 0 8px',
           fontStyle: 'italic',
         },
       });
@@ -2507,45 +2497,4 @@ async function findModuleInProject(moduleName: string): Promise<{ path: string, 
   }
 
   return null;
-}
-
-// Helper: Detect let v and run CLI for each value, print result to console
-async function handleValueUsageCount(document: vscode.TextDocument) {
-  const text = document.getText();
-  const fileName = document.fileName;
-  const moduleName = path.basename(fileName, '.res');
-
-  // Find all let value declarations (simple regex, not perfect)
-  // Matches: let v, let v: type, let v =, let v: type =
-  const letRegex = /let\s+([a-zA-Z_][a-zA-Z0-9_]*)\b/g;
-  let match;
-  const foundValues: Set<string> = new Set();
-  while ((match = letRegex.exec(text)) !== null) {
-    foundValues.add(match[1]);
-  }
-
-  if (foundValues.size === 0) return;
-
-  // Find CLI path
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (!workspaceFolders) return;
-  const context = { extensionPath: vscode.extensions.getExtension('mununki.vscode-bibimbob')?.extensionPath || '' } as vscode.ExtensionContext;
-  const cliPath = await findRescriptDepCLI(context);
-
-  // Find bsDir (project root)
-  const workspaceRoot = workspaceFolders[0].uri.fsPath;
-  const projectRoot = await findProjectRootForFile(fileName, workspaceRoot) || workspaceRoot;
-  const bsDir = path.join(projectRoot, 'lib', 'bs');
-
-  // For each value, run CLI and print result
-  for (const valueName of foundValues) {
-    const args = ['-m', moduleName, '-vb', valueName, bsDir];
-    try {
-      const result = await runRescriptDep(cliPath, args);
-      // Print usage count result to console (for now)
-      console.log(`[Bibimbob] Usage count for ${moduleName}.${valueName}:`, result.trim());
-    } catch (err) {
-      console.warn(`[Bibimbob] Failed to get usage count for ${moduleName}.${valueName}:`, err);
-    }
-  }
 }

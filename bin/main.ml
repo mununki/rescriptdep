@@ -10,6 +10,7 @@ let skip_cache = ref false
 let clear_cache = ref false
 let no_dependents = ref false
 let value_binding = ref None
+let value_line = ref None
 
 let spec_list =
   [
@@ -67,6 +68,12 @@ let spec_list =
       Arg.String (fun s -> value_binding := Some s),
       "Analyze usage count of a value binding in dependents of the focused \
        module" );
+    ( "-vl",
+      Arg.Int (fun n -> value_line := Some n),
+      "Line number of the value binding (1-based, optional, for local lets)" );
+    ( "--value-line",
+      Arg.Int (fun n -> value_line := Some n),
+      "Line number of the value binding (1-based, optional, for local lets)" );
   ]
 
 let anon_fun file = input_files := file :: !input_files
@@ -133,9 +140,11 @@ let main () =
             normalized_name
         in
         time_checkpoint "Module focusing completed";
+        (* Pass value_line to the counting function if provided *)
         let usage_list =
           Rescriptdep.Dependency_graph.count_value_usage_in_dependents
             focused_graph ~module_name:normalized_name ~value_name
+            ~value_line:!value_line
         in
         let output_to =
           match !output_file with

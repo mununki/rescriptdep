@@ -13,4 +13,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type loc = { loc_start : int; loc_end : int; loc_ghost : bool }
+type loc = {
+  loc_start : Lexing.position;
+  loc_end : Lexing.position;
+  loc_ghost : bool;
+}

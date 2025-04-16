@@ -24,4 +24,4 @@ function run() {
 
 exports.M = M;
 exports.run = run;
-/* Comp0 Not a pure module */
+/* Math Not a pure module */

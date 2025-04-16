@@ -21,9 +21,8 @@ open Types
 
 type pattern = {
   pat_desc : pattern_desc;
-  pat_loc : unit; (* Location.t; *)
-  pat_extra :
-    (pat_extra * unit (* Location.t *) * string (* Parsetree.attributes *)) list;
+  pat_loc : Location.t;
+  pat_extra : (pat_extra * Location.t * string (* Parsetree.attributes *)) list;
   pat_type : type_expr;
   mutable pat_env : unit; (* Env.t; *)
   pat_attributes : string; (* Parsetree.attributes; *)
@@ -37,7 +36,7 @@ and pat_extra =
 
 and pattern_desc =
   | Tpat_any
-  | Tpat_var of string * string
+  | Tpat_var of Ident.t * string Asttypes.loc
   | Tpat_alias of pattern * string * string
   | Tpat_constant of constant
   | Tpat_tuple of pattern list
@@ -50,9 +49,8 @@ and pattern_desc =
 
 and expression = {
   exp_desc : expression_desc;
-  exp_loc : unit; (* Location.t; *)
-  exp_extra :
-    (exp_extra * unit (* Location.t *) * string (* Parsetree.attributes *)) list;
+  exp_loc : Location.t;
+  exp_extra : (exp_extra * Location.t * string (* Parsetree.attributes *)) list;
   exp_type : type_expr;
   exp_env : unit; (* Env.t; *)
   exp_attributes : string; (* Parsetree.attributes; *)
@@ -79,17 +77,15 @@ and expression_desc =
   | Texp_match of expression * case list * case list * partial
   | Texp_try of expression * case list
   | Texp_tuple of expression list
-  | Texp_construct of
-      unit (* Location.t *) * constructor_description * expression list
+  | Texp_construct of Location.t * constructor_description * expression list
   | Texp_variant of string * expression option
   | Texp_record of {
       fields : (label_description * record_label_definition) array;
       representation : Types.record_representation;
       extended_expression : expression option;
     }
-  | Texp_field of expression * unit (* Location.t *) * label_description
-  | Texp_setfield of
-      expression * unit (* Location.t *) * label_description * expression
+  | Texp_field of expression * Location.t * label_description
+  | Texp_setfield of expression * Location.t * label_description * expression
   | Texp_array of expression list
   | Texp_ifthenelse of expression * expression * expression option
   | Texp_sequence of expression * expression
@@ -109,29 +105,29 @@ and expression_desc =
   | Texp_pack of module_expr
   | Texp_letop of { let_ : binding_op; ands : binding_op list; body : case }
   | Texp_unreachable
-  | Texp_extension_constructor of unit (* Location.t *) * Path.t
+  | Texp_extension_constructor of Location.t * Path.t
   | Texp_open of open_declaration * expression
 
-and meth = Tmeth_name of string | Tmeth_val of unit (* Ident.t *)
+and meth = Tmeth_name of string | Tmeth_val of Ident.t
 and case = { c_lhs : pattern; c_guard : expression option; c_rhs : expression }
 
 and record_label_definition =
   | Kept of Types.type_expr
-  | Overridden of unit (* Location.t *) * expression
+  | Overridden of Location.t * expression
 
 and binding_op = {
   bop_op_path : Path.t;
   bop_op_val : value_description;
   bop_op_type : Types.type_expr;
   bop_exp : expression;
-  bop_loc : unit; (* Location.t *)
+  bop_loc : Location.t;
 }
 
 and value_binding = {
   vb_pat : pattern;
   vb_expr : expression;
   vb_attributes : string; (* Parsetree.attributes; *)
-  vb_loc : unit; (* Location.t; *)
+  vb_loc : Location.t;
 }
 
 and module_binding = {
@@ -139,7 +135,7 @@ and module_binding = {
   mb_name : string Asttypes.loc;
   mb_expr : module_expr;
   mb_attributes : string; (* Parsetree.attributes; *)
-  mb_loc : Location.t; (* Location.t; *)
+  mb_loc : Location.t;
 }
 
 and module_coercion =
@@ -153,7 +149,7 @@ and module_type = {
   mty_desc : module_type_desc;
   mty_type : Types.module_type;
   mty_env : unit; (* Env.t; *)
-  mty_loc : unit; (* Location.t; *)
+  mty_loc : Location.t;
   mty_attributes : string; (* Parsetree.attributes; *)
 }
 
@@ -161,8 +157,7 @@ and module_type_desc =
   | Tmty_ident of Path.t * unit
   | Tmty_signature of signature
   | Tmty_functor of unit * string * module_type option * module_type
-  | Tmty_with of
-      module_type * (Path.t * unit (* Location.t *) * with_constraint) list
+  | Tmty_with of module_type * (Path.t * Location.t * with_constraint) list
   | Tmty_typeof of module_expr
   | Tmty_alias of Path.t * unit
 
@@ -175,7 +170,7 @@ and signature = {
 and signature_item = {
   sig_desc : signature_item_desc;
   sig_env : unit; (* Env.t; *)
-  sig_loc : unit; (* Location.t; *)
+  sig_loc : Location.t;
 }
 
 and signature_item_desc =
@@ -185,7 +180,6 @@ and signature_item_desc =
   | Tsig_typext of type_extension
   | Tsig_exception of extension_constructor
   | Tsig_module of string * module_declaration
-  | Tsig_modsubst of string * module_substitution
   | Tsig_recmodule of module_declaration list
   | Tsig_modtype of string * modtype_declaration
   | Tsig_modtypesubst of string * modtype_declaration
@@ -196,24 +190,16 @@ and signature_item_desc =
   | Tsig_attribute of string (* Parsetree.attribute *)
 
 and module_declaration = {
-  md_id : string; (* Ident.t; *)
-  md_name : string; (* Location.t; *)
+  md_id : Ident.t;
+  md_name : string Asttypes.loc;
   md_type : module_type;
   md_attributes : string; (* Parsetree.attributes; *)
-  md_loc : unit; (* Location.t; *)
-}
-
-and module_substitution = {
-  ms_id : string; (* Ident.t; *)
-  ms_name : string; (* Location.t; *)
-  ms_manifest : Path.t;
-  ms_attributes : string; (* Parsetree.attributes; *)
-  ms_loc : unit; (* Location.t; *)
+  md_loc : Location.t;
 }
 
 and module_expr = {
   mod_desc : module_expr_desc;
-  mod_loc : unit; (* Location.t; *)
+  mod_loc : Location.t;
   mod_type : Types.module_type;
   mod_env : unit; (* Env.t; *)
   mod_attributes : string; (* Parsetree.attributes; *)
@@ -236,7 +222,7 @@ and structure = {
 
 and structure_item = {
   str_desc : structure_item_desc;
-  str_loc : unit; (* Location.t; *)
+  str_loc : Location.t;
   str_env : unit; (* Env.t; *)
 }
 
@@ -257,11 +243,11 @@ and structure_item_desc =
   | Tstr_attribute of string (* Parsetree.attribute *)
 
 and module_type_declaration = {
-  mtd_id : string; (* Ident.t; *)
-  mtd_name : string; (* Location.t; *)
+  mtd_id : Ident.t;
+  mtd_name : string Asttypes.loc;
   mtd_type : module_type option;
   mtd_attributes : string; (* Parsetree.attributes; *)
-  mtd_loc : unit; (* Location.t; *)
+  mtd_loc : Location.t;
 }
 
 and open_declaration = {
@@ -269,15 +255,15 @@ and open_declaration = {
   open_bound_items : Types.signature;
   open_override : override_flag;
   open_env : unit; (* Env.t; *)
-  open_loc : unit; (* Location.t; *)
+  open_loc : Location.t;
   open_attributes : string; (* Parsetree.attributes; *)
 }
 
 and open_description = {
   open_path : Path.t;
-  open_txt : string; (* Location.t; *)
+  open_txt : Longident.t Asttypes.loc;
   open_override : override_flag;
-  open_loc : unit; (* Location.t; *)
+  open_loc : Location.t;
   open_attributes : string; (* Parsetree.attributes; *)
 }
 
@@ -291,7 +277,7 @@ and include_declaration = {
 and include_description = {
   incl_mod : module_type;
   incl_type : Types.signature;
-  incl_loc : unit; (* Location.t; *)
+  incl_loc : Location.t;
   incl_attributes : string; (* Parsetree.attributes; *)
 }
 
@@ -305,7 +291,7 @@ and core_type = {
   ctyp_desc : core_type_desc;
   ctyp_type : type_expr;
   ctyp_env : unit; (* Env.t; *)
-  ctyp_loc : unit; (* Location.t; *)
+  ctyp_loc : Location.t;
   ctyp_attributes : string; (* Parsetree.attributes; *)
 }
 
@@ -323,25 +309,25 @@ and core_type_desc =
   | Ttyp_package of package_type
 
 and value_description = {
-  val_id : string; (* Ident.t; *)
-  val_name : string; (* Location.t; *)
+  val_id : Ident.t;
+  val_name : string Asttypes.loc;
   val_desc : core_type;
   val_val : Types.value_description;
   val_prim : string list;
-  val_loc : unit; (* Location.t; *)
+  val_loc : Location.t;
   val_attributes : string; (* Parsetree.attributes; *)
 }
 
 and type_declaration = {
-  typ_id : string; (* Ident.t; *)
-  typ_name : string; (* Location.t; *)
+  typ_id : Ident.t;
+  typ_name : string Asttypes.loc;
   typ_params : (core_type * unit) list;
   typ_type : Types.type_declaration;
   typ_cstrs : unit;
   typ_kind : type_kind;
   typ_private : private_flag;
   typ_manifest : core_type option;
-  typ_loc : unit; (* Location.t; *)
+  typ_loc : Location.t;
   typ_attributes : string; (* Parsetree.attributes; *)
 }
 
@@ -352,20 +338,20 @@ and type_kind =
   | Ttype_open
 
 and label_declaration = {
-  ld_id : string; (* Ident.t; *)
-  ld_name : string; (* Location.t; *)
+  ld_id : Ident.t;
+  ld_name : string Asttypes.loc;
   ld_mutable : mutable_flag;
   ld_type : core_type;
-  ld_loc : unit; (* Location.t; *)
+  ld_loc : Location.t;
   ld_attributes : string; (* Parsetree.attributes; *)
 }
 
 and constructor_declaration = {
-  cd_id : string; (* Ident.t; *)
-  cd_name : string; (* Location.t; *)
+  cd_id : Ident.t;
+  cd_name : string Asttypes.loc;
   cd_args : constructor_arguments;
   cd_res : core_type option;
-  cd_loc : unit; (* Location.t; *)
+  cd_loc : Location.t;
   cd_attributes : string; (* Parsetree.attributes; *)
 }
 
@@ -375,20 +361,20 @@ and constructor_arguments =
 
 and type_extension = {
   tyext_path : Path.t;
-  tyext_txt : string; (* Location.t; *)
+  tyext_txt : Longident.t Asttypes.loc;
   tyext_params : (core_type * unit) list;
   tyext_constructors : extension_constructor list;
   tyext_private : private_flag;
-  tyext_loc : unit; (* Location.t; *)
+  tyext_loc : Location.t;
   tyext_attributes : string; (* Parsetree.attributes; *)
 }
 
 and extension_constructor = {
-  ext_id : string; (* Ident.t; *)
-  ext_name : string; (* Location.t; *)
+  ext_id : Ident.t;
+  ext_name : string Asttypes.loc;
   ext_type : Types.extension_constructor;
   ext_kind : extension_constructor_kind;
-  ext_loc : unit; (* Location.t; *)
+  ext_loc : Location.t;
   ext_attributes : string; (* Parsetree.attributes; *)
 }
 
@@ -409,7 +395,7 @@ and class_structure = {
 
 and class_field = {
   cf_desc : class_field_desc;
-  cf_loc : unit; (* Location.t; *)
+  cf_loc : Location.t;
   cf_attributes : string; (* Parsetree.attributes; *)
 }
 
@@ -429,7 +415,7 @@ and class_field_desc =
 
 and class_expr = {
   cl_desc : class_expr_desc;
-  cl_loc : unit; (* Location.t; *)
+  cl_loc : Location.t;
   cl_type : Types.class_type;
   cl_env : unit; (* Env.t; *)
   cl_attributes : string; (* Parsetree.attributes; *)
@@ -449,14 +435,18 @@ and module_type_constraint =
   | Tmodtype_explicit of module_type
 
 and row_field =
-  | Ttag of string * string (* Location.t *) * bool * core_type list
+  | Ttag of
+      string Asttypes.loc
+      * string (* Parsetree.attributes; *)
+      * bool
+      * core_type list
   | Tinherit of core_type
 
 and package_type = {
   pack_path : Path.t;
   pack_fields : (string * core_type) list;
   pack_type : Types.module_type;
-  pack_txt : string; (* Location.t; *)
+  pack_txt : Longident.t Asttypes.loc;
 }
 
 and constant =
@@ -480,9 +470,9 @@ and constructor_description = {
   cstr_normal : int; (* Constructor number in the list (for GC) *)
   cstr_private : private_flag; (* Read-only constructor? *)
   cstr_generalized : bool; (* Generalized constructor? *)
-  cstr_loc : unit; (* Location.t *)
+  cstr_loc : Location.t;
   cstr_attributes : string; (* Parsetree.attributes *)
-  cstr_inlined : string option; (* Ident.t option *)
+  cstr_inlined : type_declaration option;
 }
 
 and constructor_tag =
@@ -502,7 +492,7 @@ and label_description = {
   lbl_all : label_description array; (* All the labels in this type *)
   lbl_repres : record_representation; (* Representation for this record *)
   lbl_private : private_flag; (* Read-only field? *)
-  lbl_loc : unit; (* Location.t *)
+  lbl_loc : Location.t;
   lbl_attributes : string; (* Parsetree.attributes *)
 }
 

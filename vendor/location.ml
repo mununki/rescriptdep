@@ -13,5 +13,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type t = Warnings.loc = { loc_start : int; loc_end : int; loc_ghost : bool }
+open Lexing
+
+type t = Warnings.loc = {
+  loc_start : position;
+  loc_end : position;
+  loc_ghost : bool;
+}
+
 type 'a loc = { txt : 'a; loc : t }

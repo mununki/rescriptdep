@@ -13,14 +13,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Source code locations (ranges of positions), used in parsetree. *)
+(* Miscellaneous useful types and functions *)
 
-open Lexing
+val fatal_error : string -> 'a
+val fatal_errorf : ('a, Format.formatter, unit, 'b) format4 -> 'a
 
-type t = Warnings.loc = {
-  loc_start : position;
-  loc_end : position;
-  loc_ghost : bool;
-}
-
-type 'a loc = { txt : 'a; loc : t }
+exception Fatal_error

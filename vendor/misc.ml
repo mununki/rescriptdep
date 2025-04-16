@@ -13,14 +13,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Source code locations (ranges of positions), used in parsetree. *)
+(* Errors *)
 
-open Lexing
+exception Fatal_error
 
-type t = Warnings.loc = {
-  loc_start : position;
-  loc_end : position;
-  loc_ghost : bool;
-}
+let fatal_error msg =
+  prerr_string ">> Fatal error: ";
+  prerr_endline msg;
+  raise Fatal_error
 
-type 'a loc = { txt : 'a; loc : t }
+let fatal_errorf fmt = Format.kasprintf fatal_error fmt
