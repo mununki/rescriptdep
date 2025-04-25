@@ -13,8 +13,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Environment handling *)
+(** Long identifiers, used in parsetree. *)
 
-type t = unit (* Simplified environment representation *)
+type t = Lident of string | Ldot of t * string | Lapply of t * t
 
-let empty = ()
+val cmp : t -> t -> int
+val flatten : t -> string list
+val unflatten : string list -> t option
+val last : t -> string
+val parse : string -> t

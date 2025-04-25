@@ -13,8 +13,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Path representation for the ReScript compiler *)
-
 type t = Pident of Ident.t | Pdot of t * string * int | Papply of t * t
 
 let rec same p1 p2 =

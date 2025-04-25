@@ -15,7 +15,8 @@
 
 (** Abstract syntax tree after typing *)
 
-(* Type expressions for the core language *)
+(** By comparison with {!Parsetree}:
+    - Every {!Longindent.t} is accompanied by a resolved {!Path.t}. *)
 
 open Types
 

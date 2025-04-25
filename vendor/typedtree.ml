@@ -15,8 +15,6 @@
 
 (* Abstract syntax tree after typing *)
 
-(* Type expressions for the core language *)
-
 open Types
 
 type pattern = {
