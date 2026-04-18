@@ -2,8 +2,17 @@
 
 open Stdlib
 
+(* Strip a namespace prefix from a qualified ReScript module name.
+   For example, "MyNamespace.Foo" becomes "Foo". *)
+let strip_module_namespace name =
+  match String.rindex_opt name '.' with
+  | Some idx when idx + 1 < String.length name ->
+      String.sub name (idx + 1) (String.length name - idx - 1)
+  | _ -> name
+
 (* Normalize module name to ensure consistent casing *)
 let normalize_module_name name =
+  let name = strip_module_namespace name in
   (* Ensure first letter is uppercase and rest is preserved *)
   if String.length name > 0 then
     String.make 1 (Char.uppercase_ascii name.[0])
@@ -13,6 +22,7 @@ let normalize_module_name name =
 (* Find the implementation file for a module by its name *)
 let find_implementation_file_by_name ?(verbose = false) module_name
     src_directories =
+  let module_name = normalize_module_name module_name in
   let name_patterns =
     [
       module_name;
@@ -53,6 +63,7 @@ let find_implementation_file_by_name ?(verbose = false) module_name
 
 (* Check if a module is part of the standard library or internal modules *)
 let is_stdlib_or_internal_module name =
+  let name = normalize_module_name name in
   let stdlib_modules =
     [
       (* ReScript standard library modules *)
@@ -161,6 +172,7 @@ let is_stdlib_or_internal_module name =
 
 (* Check if a string is a valid module name *)
 let is_valid_module_name str =
+  let str = strip_module_namespace str in
   (* Basic validation for a module name: starts with capital letter, only contains valid chars *)
   String.length str > 0
   && str.[0] >= 'A'

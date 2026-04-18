@@ -403,7 +403,11 @@ module DependencyExtractor = struct
           let modules_set = StringSet.of_list modules in
 
           (* Efficient set membership check *)
-          let result = StringSet.mem module_name modules_set in
+          let canonical_module_name = normalize_module_name module_name in
+          let result =
+            StringSet.mem module_name modules_set
+            || StringSet.mem canonical_module_name modules_set
+          in
 
           (* Cache the result *)
           Cache.cache_ast_dependency_result ~verbose ~skip_cache cache_key
@@ -473,7 +477,11 @@ module DependencyExtractor = struct
                 timed_out := true)
               else
                 (* O(1) lookup using set instead of O(n) with List.mem *)
-                let is_used = StringSet.mem module_name ast_modules_set in
+                let canonical_module_name = normalize_module_name module_name in
+                let is_used =
+                  StringSet.mem module_name ast_modules_set
+                  || StringSet.mem canonical_module_name ast_modules_set
+                in
 
                 (* Cache individual results *)
                 let cache_key = source_file ^ ":" ^ module_name in
