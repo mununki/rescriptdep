@@ -1,0 +1,49 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # setup-ocaml@v2 currently tries to install darcs during opam init,
+    # which fails on ubuntu-24.04 runners because the package is unavailable.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+          run_install: false
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: 5.3.0
+          dune-cache: false
+      - name: Install OCaml dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if opam install . --deps-only --with-test; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "opam install failed on attempt $attempt, retrying..."
+              sleep 10
+            fi
+          done
+
+          echo "opam install failed after 3 attempts"
+          exit 1
+      - name: Run test suite
+        run: opam exec -- make test

@@ -51,10 +51,10 @@ For detailed information about building the project, running tests, and contribu
 
 ```bash
 # Build the project
-dune build
+make build
 
-# Run all tests
-dune runtest
+# Run the CI-equivalent test suite (requires pnpm 8.x)
+make test
 ```
 
 ## License

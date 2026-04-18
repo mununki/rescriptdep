@@ -6,7 +6,7 @@ Thank you for your interest in contributing to ReScriptDep! This document provid
 
 ```bash
 # Build the project
-dune build
+make build
 
 # Build a specific executable
 dune build bin/main.exe
@@ -20,8 +20,8 @@ dune build --profile static
 You can run tests using the following methods:
 
 ```bash
-# Run all tests
-dune runtest
+# Run the CI-equivalent test suite (requires pnpm 8.x)
+make test
 
 # Run specific tests:
 dune exec test/test_cmt_values.exe   # Test value dependency information
@@ -47,7 +47,6 @@ The test system uses two types of fixtures:
 The dependency analysis tests use JSON fixtures to ensure consistent behavior:
 
 - `test/fixtures/rescript.json`: Reference output for the rescript test project
-- `test/fixtures/rewatch.json`: Reference output for the rewatch test project
 
 These fixtures are automatically generated on first run and serve as reference points for future test runs. If the dependency analysis output differs from these fixtures, the test will fail and show a diff of the changes.
 
@@ -56,7 +55,6 @@ These fixtures are automatically generated on first run and serve as reference p
 The test directory contains sample ReScript projects used for testing the dependency analyzer:
 
 - `test/rescript/`: Sample ReScript project with standard ReScript setup
-- `test/rewatch/`: Sample ReWatch project with similar structure
 
 Each test project contains:
 - `src/`: Source code files (.res, .resi)
@@ -71,7 +69,7 @@ When making changes that affect dependency analysis:
 
 1. Review the test output diff carefully to ensure changes are expected
 2. If the changes are intentional:
-   - Delete the existing fixture files: `rm test/fixtures/*.json`
+   - Delete the existing fixture file: `rm test/fixtures/rescript.json`
    - Run the tests again to generate new fixtures: `dune exec test/test_rescriptdep.exe`
    - Commit both the code changes and the updated fixtures
 
@@ -87,12 +85,13 @@ RESCRIPTDEP_BENCHMARK_PATH=/path/to/rescript/project/lib/bs/src dune exec test/b
 RESCRIPTDEP_BENCHMARK=1 RESCRIPTDEP_VERBOSE=1 RESCRIPTDEP_BENCHMARK_PATH=/path/to/project/lib/bs/src dune exec test/benchmark.exe
 ```
 
-Note: The benchmark is skipped during normal test runs (`dune runtest`).
+Note: The benchmark is skipped during normal CI-style test runs
+(`make test`).
 
 ## Pull Request Guidelines
 
 1. Create a branch for your changes
-2. Ensure all tests pass: `dune runtest`
+2. Ensure all tests pass: `make test`
 3. Add or update tests for new functionality
 4. Update documentation if needed
 5. Submit a pull request with a clear description of the changes

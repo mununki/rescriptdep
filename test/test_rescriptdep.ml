@@ -1,6 +1,29 @@
 open Stdlib
 open Printf
 
+(* Normalize machine-specific absolute paths inside JSON fixtures so the tests
+   compare repository-relative paths across local and CI environments. *)
+let normalize_json_paths input_file =
+  let normalized_file = Filename.temp_file "rescriptdep_normalized_" ".json" in
+  let ic = open_in input_file in
+  let oc = open_out normalized_file in
+  Fun.protect
+    (fun () ->
+      try
+        while true do
+          let line = input_line ic in
+          let normalized_line =
+            line |> Str.global_replace (Str.regexp {|[^"]*/test/|}) "test/"
+          in
+          output_string oc normalized_line;
+          output_char oc '\n'
+        done
+      with End_of_file -> ())
+    ~finally:(fun () ->
+      close_in_noerr ic;
+      close_out_noerr oc);
+  normalized_file
+
 (* Run rescriptdep CLI and generate json output to temporary file *)
 let run_rescriptdep_to_temp project_dir =
   let temp_file = Filename.temp_file "rescriptdep_" ".json" in
@@ -33,33 +56,44 @@ let test_project_fixtures project_name =
 
   (* Run rescriptdep to generate current output in temp file *)
   let temp_output = run_rescriptdep_to_temp project_dir in
+  let normalized_temp_output = normalize_json_paths temp_output in
 
   (* If reference output doesn't exist, create it by copying temp output *)
   let result =
     if not (Sys.file_exists reference_output) then (
       printf "Creating initial fixture for %s\n" project_name;
       let _ =
-        Sys.command (Printf.sprintf "cp %s %s" temp_output reference_output)
+        Sys.command
+          (Printf.sprintf "cp %s %s" normalized_temp_output reference_output)
       in
       true)
     else
       (* Compare temp output with reference output *)
-      let is_same = compare_files temp_output reference_output in
-      if not is_same then (
-        printf "ERROR: Output for %s differs from reference fixture!\n"
-          project_name;
-        let diff_cmd =
-          Printf.sprintf "diff -u %s %s" reference_output temp_output
-        in
-        let _ = Sys.command diff_cmd in
-        false)
-      else (
-        printf "Output for %s matches reference fixture\n" project_name;
-        true)
+      let normalized_reference_output = normalize_json_paths reference_output in
+      let is_same =
+        compare_files normalized_reference_output normalized_temp_output
+      in
+      let result =
+        if not is_same then (
+          printf "ERROR: Output for %s differs from reference fixture!\n"
+            project_name;
+          let diff_cmd =
+            Printf.sprintf "diff -u %s %s" normalized_reference_output
+              normalized_temp_output
+          in
+          let _ = Sys.command diff_cmd in
+          false)
+        else (
+          printf "Output for %s matches reference fixture\n" project_name;
+          true)
+      in
+      Sys.remove normalized_reference_output;
+      result
   in
 
   (* Clean up temp file *)
   Sys.remove temp_output;
+  Sys.remove normalized_temp_output;
 
   result
 
@@ -67,12 +101,7 @@ let test_project_fixtures project_name =
 let test_rescriptdep () =
   printf "=== Running rescriptdep dependency tests ===\n";
 
-  (* Test each project *)
-  let rescript_result = test_project_fixtures "rescript" in
-  let rewatch_result = test_project_fixtures "rewatch" in
-
-  (* Return true only if all tests passed *)
-  rescript_result && rewatch_result
+  test_project_fixtures "rescript"
 
 (* Main execution code *)
 let () =

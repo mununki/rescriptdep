@@ -98,7 +98,10 @@ let test_cmt_values () =
     else filename
   in
 
-  let files = List.map fix_path [ "fixtures/math.cmt"; "fixtures/app.cmt" ] in
+  let files =
+    List.map fix_path
+      [ "rescript/lib/bs/src/math.cmt"; "rescript/lib/bs/src/app.cmt" ]
+  in
 
   (* Print the paths we're trying to use *)
   List.iter (fun path -> Printf.printf "Trying to use path: %s\n" path) files;
