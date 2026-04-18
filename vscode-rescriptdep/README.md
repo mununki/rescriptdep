@@ -39,10 +39,10 @@ Windows support is planned for a future release. The limitation is due to issues
 
 This extension provides several commands in the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`):
 
-- **ReScript: Show Dependency Graph**: Shows the full dependency graph of your project
-- **ReScript: Focus On Module Dependencies**: Focuses on a specific module and its relationships
-- **ReScript: Show Unused Modules**: Identifies and visualizes modules that have no dependents (potentially unused code)
-- **ReScript: Clear Dependency Cache**: Clears the cached dependency data for improved accuracy after major changes
+- **Bibimbob: Show Dependency Graph**: Shows the full dependency graph of your project
+- **Bibimbob: Focus On Module Dependencies**: Focuses on a specific module and its relationships
+- **Bibimbob: Show Unused Modules**: Identifies and visualizes modules that have no dependents (potentially unused code)
+- **Bibimbob: Toggle Value Usage Count**: Turns inline value usage count annotations on or off
 
 ## Requirements
 
@@ -71,6 +71,11 @@ This extension doesn't require any specific settings.
 - Please report any issues on the GitHub repository
 
 ## Release Notes
+
+### 0.8.1
+
+- Fixed focused module dependency analysis for ReScript namespace projects
+- Improved extension packaging metadata for Marketplace and Open VSX releases
 
 ### 0.8.0
 

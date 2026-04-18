@@ -1,8 +1,8 @@
 {
   "name": "vscode-bibimbob",
   "displayName": "Bibimbob",
-  "description": "A tool to analyze dependencies between ReScript modules",
-  "version": "0.8.0",
+  "description": "Visualize ReScript module dependencies, inspect focused graphs, and find unused modules",
+  "version": "0.8.1",
   "publisher": "mununki",
   "license": "MIT",
   "icon": "images/rescriptdep_icon.png",
@@ -22,13 +22,33 @@
     "vscode": "^1.96.0"
   },
   "categories": [
+    "Visualization",
     "Other"
+  ],
+  "keywords": [
+    "rescript",
+    "reasonml",
+    "dependency",
+    "graph",
+    "visualization",
+    "unused-code"
+  ],
+  "extensionKind": [
+    "workspace"
   ],
   "activationEvents": [
     "workspaceContains:**/bsconfig.json",
     "workspaceContains:**/rescript.json"
   ],
   "main": "./dist/extension.js",
+  "files": [
+    "dist/**/*",
+    "bin/**/*",
+    "images/**/*",
+    "package.json",
+    "README.md",
+    "LICENSE.md"
+  ],
   "contributes": {
     "commands": [
       {
@@ -57,6 +77,10 @@
     {
       "path": "images/rescriptdep_screenshot_1.png",
       "description": "ReScript Module Dependencies View"
+    },
+    {
+      "path": "images/rescriptdep_screenshot_2.png",
+      "description": "Inline Value Usage Count Annotation"
     }
   ],
   "scripts": {
