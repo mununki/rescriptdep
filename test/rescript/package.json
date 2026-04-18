@@ -1,6 +1,7 @@
 {
   "name": "rescript_test_project",
   "version": "0.0.0",
+  "packageManager": "pnpm@10.33.0",
   "description": "",
   "main": "index.js",
   "scripts": {

@@ -5,5 +5,5 @@
   "scripts": {
     "build": "pnpm -r res:build"
   },
-  "packageManager": "pnpm@10.6.4"
+  "packageManager": "pnpm@10.33.0"
 }

@@ -29,7 +29,7 @@ jobs:
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 10.33.0
           run_install: false
 
       - name: Get pnpm store directory
@@ -46,7 +46,7 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: cd vscode-rescriptdep && pnpm install
+        run: cd vscode-rescriptdep && pnpm install --frozen-lockfile
 
       - name: Create temp and bin directories
         run: |

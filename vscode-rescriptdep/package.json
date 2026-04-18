@@ -3,6 +3,7 @@
   "displayName": "Bibimbob",
   "description": "Visualize ReScript module dependencies, inspect focused graphs, and find unused modules",
   "version": "0.8.1",
+  "packageManager": "pnpm@10.33.0",
   "publisher": "mununki",
   "license": "MIT",
   "icon": "images/rescriptdep_icon.png",

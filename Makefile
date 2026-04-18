@@ -7,13 +7,13 @@ test: check-pnpm install-test-deps build-test-projects run-ocaml-tests
 
 check-pnpm:
 	@pnpm_major="$$(pnpm --version 2>/dev/null | cut -d. -f1 || true)"; \
-	if [ "$$pnpm_major" != "8" ]; then \
-		echo "make test requires pnpm 8.x for the checked-in lockfiles" >&2; \
+	if [ "$$pnpm_major" != "10" ]; then \
+		echo "make test requires pnpm 10.x for the checked-in lockfiles" >&2; \
 		exit 1; \
 	fi
 
 install-test-deps:
-	pnpm --dir test/rescript install --frozen-lockfile
+	CI=1 pnpm --dir test/rescript install --frozen-lockfile
 
 build-test-projects:
 	pnpm --dir test/rescript run res:build
