@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # setup-ocaml@v2 currently tries to install darcs during opam init,
+    # which fails on ubuntu-24.04 runners because the package is unavailable.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
