@@ -19,13 +19,15 @@ permissions:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    # Pin to an Intel runner so the produced macOS binary actually matches the
+    # x64 artifact name consumed by the VS Code extension release workflow.
+    runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up OCaml
-        uses: ocaml/setup-ocaml@v2
+        uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.3.0
+          ocaml-compiler: "5.3.0"
           dune-cache: false
       - name: Get version
         id: get_version
@@ -62,7 +64,7 @@ jobs:
       image: ocaml/opam:alpine-ocaml-5.3
       options: --user root
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Get version
         id: get_version
         run: |
