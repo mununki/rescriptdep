@@ -1,5 +1,11 @@
 (tests
- (names test_rescriptdep test_cmt_imports test_cmt_values test_ast test_namespace)
+ (names
+  test_rescriptdep
+  test_cmt_imports
+  test_cmt_values
+  test_ast
+  test_namespace
+  test_rewatch_paths)
  (libraries rescriptdep str)
  (deps
   (glob_files fixtures/*.cmt)))

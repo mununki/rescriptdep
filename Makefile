@@ -26,3 +26,4 @@ run-ocaml-tests:
 	dune exec ./test/test_ast.exe
 	dune exec ./test/test_rescriptdep.exe
 	dune exec ./test/test_namespace.exe
+	dune exec ./test/test_rewatch_paths.exe
