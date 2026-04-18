@@ -101,12 +101,7 @@ let test_project_fixtures project_name =
 let test_rescriptdep () =
   printf "=== Running rescriptdep dependency tests ===\n";
 
-  (* Test each project *)
-  let rescript_result = test_project_fixtures "rescript" in
-  let rewatch_result = test_project_fixtures "rewatch" in
-
-  (* Return true only if all tests passed *)
-  rescript_result && rewatch_result
+  test_project_fixtures "rescript"
 
 (* Main execution code *)
 let () =

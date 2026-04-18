@@ -4,8 +4,7 @@
   test_cmt_imports
   test_cmt_values
   test_ast
-  test_namespace
-  test_rewatch_paths)
+  test_namespace)
  (libraries rescriptdep str)
  (deps
   (glob_files fixtures/*.cmt)))

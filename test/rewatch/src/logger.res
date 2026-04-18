@@ -1,1 +1,0 @@
-let log = message => Js.log(message)

@@ -243,28 +243,10 @@ module DependencyExtractor = struct
         (* For path applications, we'll use the first path *)
         extract_module_from_path p1
 
-  let resolve_case_insensitive_path path =
-    if Sys.file_exists path then Some path
-    else
-      let dir = Filename.dirname path in
-      let target = Filename.basename path |> String.lowercase_ascii in
-      try
-        Sys.readdir dir
-        |> Array.to_list
-        |> List.find_opt (fun entry ->
-               String.lowercase_ascii entry = target
-               && not (Sys.is_directory (Filename.concat dir entry)))
-        |> Option.map (Filename.concat dir)
-      with Sys_error _ -> None
-
-  (* Resolve the AST file path even when the build tool emits a casing that
-     differs from the source file stem, such as Rewatch 1.0.x on Linux. *)
+  (* Simplified AST file path resolution - just replace extension with .ast in the same directory *)
   let get_ast_path cmt_path =
     let base_path = Filename.remove_extension cmt_path in
-    let direct_ast = base_path ^ ".ast" in
-    match resolve_case_insensitive_path direct_ast with
-    | Some path -> path
-    | None -> direct_ast
+    base_path ^ ".ast"
 
   (* Function to read AST file contents efficiently *)
   let read_ast_file ?(verbose = false) ?(skip_cache = false) ast_path =
@@ -349,35 +331,34 @@ module DependencyExtractor = struct
       let base_path = Filename.remove_extension source_file in
       let direct_cmt = base_path ^ ".cmt" in
 
-      match resolve_case_insensitive_path direct_cmt with
-      | Some path -> path
-      | None ->
-          (* Try to find in lib/bs/src if source file is in src directory *)
-          let src_pattern = Str.regexp ".*/src/\\(.*\\)\\.[a-zA-Z]+$" in
-          if Str.string_match src_pattern source_file 0 then
-            let file_path = Str.matched_group 1 source_file in
-            let project_root =
-              let src_index =
-                Str.search_forward (Str.regexp "/src/") source_file 0
-              in
-              String.sub source_file 0 src_index
+      if Sys.file_exists direct_cmt then direct_cmt
+      else
+        (* Try to find in lib/bs/src if source file is in src directory *)
+        let src_pattern = Str.regexp ".*/src/\\(.*\\)\\.[a-zA-Z]+$" in
+        if Str.string_match src_pattern source_file 0 then
+          let file_path = Str.matched_group 1 source_file in
+          let project_root =
+            let src_index =
+              Str.search_forward (Str.regexp "/src/") source_file 0
             in
-            let bs_path =
-              Filename.concat
-                (Filename.concat (Filename.concat project_root "lib") "bs")
-                "src"
-            in
-            let cmt_file = Filename.concat bs_path (file_path ^ ".cmt") in
-            match resolve_case_insensitive_path cmt_file with
-            | Some path
-              when not
-                     (String.contains path '/'
-                     && Str.string_match
-                          (Str.regexp ".*___incremental.*")
-                          path 0) ->
-                path
-            | _ -> direct_cmt
+            String.sub source_file 0 src_index
+          in
+          let bs_path =
+            Filename.concat
+              (Filename.concat (Filename.concat project_root "lib") "bs")
+              "src"
+          in
+          let cmt_file = Filename.concat bs_path (file_path ^ ".cmt") in
+          if
+            Sys.file_exists cmt_file
+            && not
+                 (String.contains cmt_file '/'
+                 && Str.string_match
+                      (Str.regexp ".*___incremental.*")
+                      cmt_file 0)
+          then cmt_file
           else direct_cmt (* Fallback to direct replacement *)
+        else direct_cmt (* Fallback to direct replacement *)
 
   (* Optimized check if a module is used in AST file *)
   let is_module_used_in_ast ?(verbose = false) ?(skip_cache = false) source_file

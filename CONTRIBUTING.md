@@ -47,7 +47,6 @@ The test system uses two types of fixtures:
 The dependency analysis tests use JSON fixtures to ensure consistent behavior:
 
 - `test/fixtures/rescript.json`: Reference output for the rescript test project
-- `test/fixtures/rewatch.json`: Reference output for the rewatch test project
 
 These fixtures are automatically generated on first run and serve as reference points for future test runs. If the dependency analysis output differs from these fixtures, the test will fail and show a diff of the changes.
 
@@ -56,7 +55,6 @@ These fixtures are automatically generated on first run and serve as reference p
 The test directory contains sample ReScript projects used for testing the dependency analyzer:
 
 - `test/rescript/`: Sample ReScript project with standard ReScript setup
-- `test/rewatch/`: Sample ReWatch project with similar structure
 
 Each test project contains:
 - `src/`: Source code files (.res, .resi)
@@ -71,7 +69,7 @@ When making changes that affect dependency analysis:
 
 1. Review the test output diff carefully to ensure changes are expected
 2. If the changes are intentional:
-   - Delete the existing fixture files: `rm test/fixtures/*.json`
+   - Delete the existing fixture file: `rm test/fixtures/rescript.json`
    - Run the tests again to generate new fixtures: `dune exec test/test_rescriptdep.exe`
    - Commit both the code changes and the updated fixtures
 
