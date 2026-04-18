@@ -6,8 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.1.1] - 2026-04-18
 ### Fixed
 - Fixed an issue where standard modules were not filtered when the `-m` flag was not used
+- Fixed focused module dependency analysis for projects using `namespace` in `rescript.json`
 
 ### Added
 - Static linking support for Linux environments
@@ -18,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed `--cache-file` option completely
 - Enhanced error handling for workspace analysis
 - Improved progress reporting in VS Code extension
+- Removed outdated Rewatch-specific test fixtures and compatibility logic
 
 ## [0.1.0] - 2024-06-19
 
