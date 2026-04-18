@@ -30,6 +30,20 @@ jobs:
           ocaml-compiler: 5.3.0
           dune-cache: false
       - name: Install OCaml dependencies
-        run: opam install . --deps-only --with-test
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if opam install . --deps-only --with-test; then
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "opam install failed on attempt $attempt, retrying..."
+              sleep 10
+            fi
+          done
+
+          echo "opam install failed after 3 attempts"
+          exit 1
       - name: Run test suite
         run: opam exec -- make test
