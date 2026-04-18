@@ -11,17 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed an issue where standard modules were not filtered when the `-m` flag was not used
 - Fixed focused module dependency analysis for projects using `namespace` in `rescript.json`
+- Improved CI resilience against transient opam dependency fetch failures
 
 ### Added
 - Static linking support for Linux environments
 - Performance benchmarking mode with `--benchmark` flag
+- Added a Makefile-based test workflow for local and CI runs
+- Added namespace-focused regression coverage
 
 ### Changed
 - Removed file-based cache persistence in favor of in-memory caching only
 - Removed `--cache-file` option completely
 - Enhanced error handling for workspace analysis
 - Improved progress reporting in VS Code extension
-- Removed outdated Rewatch-specific test fixtures and compatibility logic
+- Removed outdated Rewatch-specific test fixtures and compatibility logic, keeping analysis focused on compiler-generated `.cmt` and `.ast` files
 
 ## [0.1.0] - 2024-06-19
 
