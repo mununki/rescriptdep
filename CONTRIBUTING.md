@@ -20,8 +20,8 @@ dune build --profile static
 You can run tests using the following methods:
 
 ```bash
-# Run all tests
-dune runtest
+# Run the CI-equivalent test suite (requires pnpm 8.x)
+./scripts/run-ci-tests.sh
 
 # Run specific tests:
 dune exec test/test_cmt_values.exe   # Test value dependency information
@@ -87,12 +87,13 @@ RESCRIPTDEP_BENCHMARK_PATH=/path/to/rescript/project/lib/bs/src dune exec test/b
 RESCRIPTDEP_BENCHMARK=1 RESCRIPTDEP_VERBOSE=1 RESCRIPTDEP_BENCHMARK_PATH=/path/to/project/lib/bs/src dune exec test/benchmark.exe
 ```
 
-Note: The benchmark is skipped during normal test runs (`dune runtest`).
+Note: The benchmark is skipped during normal CI-style test runs
+(`./scripts/run-ci-tests.sh`).
 
 ## Pull Request Guidelines
 
 1. Create a branch for your changes
-2. Ensure all tests pass: `dune runtest`
+2. Ensure all tests pass: `./scripts/run-ci-tests.sh`
 3. Add or update tests for new functionality
 4. Update documentation if needed
 5. Submit a pull request with a clear description of the changes

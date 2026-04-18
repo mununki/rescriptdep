@@ -53,8 +53,8 @@ For detailed information about building the project, running tests, and contribu
 # Build the project
 dune build
 
-# Run all tests
-dune runtest
+# Run the CI-equivalent test suite (requires pnpm 8.x)
+./scripts/run-ci-tests.sh
 ```
 
 ## License
