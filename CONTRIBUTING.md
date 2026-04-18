@@ -6,7 +6,7 @@ Thank you for your interest in contributing to ReScriptDep! This document provid
 
 ```bash
 # Build the project
-dune build
+make build
 
 # Build a specific executable
 dune build bin/main.exe
@@ -21,7 +21,7 @@ You can run tests using the following methods:
 
 ```bash
 # Run the CI-equivalent test suite (requires pnpm 8.x)
-./scripts/run-ci-tests.sh
+make test
 
 # Run specific tests:
 dune exec test/test_cmt_values.exe   # Test value dependency information
@@ -88,12 +88,12 @@ RESCRIPTDEP_BENCHMARK=1 RESCRIPTDEP_VERBOSE=1 RESCRIPTDEP_BENCHMARK_PATH=/path/t
 ```
 
 Note: The benchmark is skipped during normal CI-style test runs
-(`./scripts/run-ci-tests.sh`).
+(`make test`).
 
 ## Pull Request Guidelines
 
 1. Create a branch for your changes
-2. Ensure all tests pass: `./scripts/run-ci-tests.sh`
+2. Ensure all tests pass: `make test`
 3. Add or update tests for new functionality
 4. Update documentation if needed
 5. Submit a pull request with a clear description of the changes
