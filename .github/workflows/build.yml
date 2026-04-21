@@ -19,9 +19,9 @@ permissions:
 
 jobs:
   build-macos:
-    # Pin to an Intel runner so the produced macOS binary actually matches the
-    # x64 artifact name consumed by the VS Code extension release workflow.
-    runs-on: macos-15-intel
+    # Keep the existing extension packaging layout, but build on the default
+    # macOS latest runner instead of pinning to Intel.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
       - name: Set up OCaml
