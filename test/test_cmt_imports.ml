@@ -77,20 +77,13 @@ let is_stdlib_or_internal_module name =
 
 (* Test execution function *)
 let test_cmt_imports () =
-  (* Get the directory of the test executable *)
-  let executable_dir = Filename.dirname Sys.executable_name in
-
-  (* Construct absolute path to the fixture file *)
-  let fix_path filename =
-    if Sys.file_exists filename then filename
-    else if Sys.file_exists (Filename.concat executable_dir filename) then
-      Filename.concat executable_dir filename
-    else if Sys.file_exists (Filename.concat "test" filename) then
-      Filename.concat "test" filename
-    else filename
+  let cmt_file =
+    Test_support.require_existing_path
+      ~hint:
+        "CMT fixture not found. Run `make test` to install the ReScript test \
+         project and build its `.cmt` output first."
+      [ "rescript/lib/bs/src/app.cmt"; "test/rescript/lib/bs/src/app.cmt" ]
   in
-
-  let cmt_file = fix_path "rescript/lib/bs/src/app.cmt" in
 
   (* Print the path we're trying to use *)
   printf "Trying to use path: %s\n" cmt_file;

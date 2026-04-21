@@ -85,22 +85,19 @@ let test_cmt_file_values cmt_file =
 
 (* Main function to test multiple cmt files *)
 let test_cmt_values () =
-  (* Get the directory of the test executable *)
-  let executable_dir = Filename.dirname Sys.executable_name in
-
-  (* Construct absolute paths to the fixture files *)
-  let fix_path filename =
-    if Sys.file_exists filename then filename
-    else if Sys.file_exists (Filename.concat executable_dir filename) then
-      Filename.concat executable_dir filename
-    else if Sys.file_exists (Filename.concat "test" filename) then
-      Filename.concat "test" filename
-    else filename
-  in
-
   let files =
-    List.map fix_path
-      [ "rescript/lib/bs/src/math.cmt"; "rescript/lib/bs/src/app.cmt" ]
+    [
+      Test_support.require_existing_path
+        ~hint:
+          "CMT fixtures not found. Run `make test` to install the ReScript \
+           test project and build its `.cmt` outputs first."
+        [ "rescript/lib/bs/src/math.cmt"; "test/rescript/lib/bs/src/math.cmt" ];
+      Test_support.require_existing_path
+        ~hint:
+          "CMT fixtures not found. Run `make test` to install the ReScript \
+           test project and build its `.cmt` outputs first."
+        [ "rescript/lib/bs/src/app.cmt"; "test/rescript/lib/bs/src/app.cmt" ];
+    ]
   in
 
   (* Print the paths we're trying to use *)

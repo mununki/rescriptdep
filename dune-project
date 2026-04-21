@@ -17,7 +17,7 @@
 
 (package
  (name rescriptdep)
- (version 0.1.1)
+ (version 0.1.2)
  (synopsis "A dependency analyzer for ReScript modules")
  (description
   "A tool to analyze dependencies between ReScript modules using cmi files")
@@ -30,6 +30,6 @@
   yojson
   (odoc :with-doc))
  (tags
-  (topics "dependency analysis" "ReScript" "OCaml")))
+  ("dependency-analysis" "rescript" "ocaml")))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html

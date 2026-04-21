@@ -101,20 +101,14 @@ let parse_module_refs filename =
 
 (* Main function *)
 let () =
-  let executable_dir = Filename.dirname Sys.executable_name in
-
-  let fix_path filename =
-    if Sys.file_exists filename then filename
-    else if Sys.file_exists (Filename.concat executable_dir filename) then
-      Filename.concat executable_dir filename
-    else if Sys.file_exists (Filename.concat "test" filename) then
-      Filename.concat "test" filename
-    else filename
-  in
-
   let ast_path =
     if Array.length Sys.argv > 1 then Sys.argv.(1)
-    else fix_path "rescript/lib/bs/src/app.ast"
+    else
+      Test_support.require_existing_path
+        ~hint:
+          "AST fixture not found. Run `make test` to install the ReScript test \
+           project and build its `.ast` output first."
+        [ "rescript/lib/bs/src/app.ast"; "test/rescript/lib/bs/src/app.ast" ]
   in
 
   printf "Analyzing AST file: %s\n" ast_path;

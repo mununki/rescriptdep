@@ -48,11 +48,27 @@ let test_project_fixtures project_name =
   printf "Testing rescriptdep on %s project...\n" project_name;
 
   (* Create paths *)
-  let project_dir = Printf.sprintf "test/%s/lib/bs" project_name in
-  let reference_output = Printf.sprintf "test/fixtures/%s.json" project_name in
+  let project_dir =
+    Test_support.require_existing_path
+      ~hint:
+        "Compiled ReScript fixture project not found. Run `make test` to \
+         install the fixture dependencies and build `lib/bs` first."
+      [
+        Printf.sprintf "%s/lib/bs" project_name;
+        Printf.sprintf "test/%s/lib/bs" project_name;
+      ]
+  in
+  let reference_output =
+    Test_support.require_existing_path
+      ~hint:"Reference JSON fixture directory not found."
+      [ Printf.sprintf "fixtures/%s.json" project_name; Printf.sprintf "test/fixtures/%s.json" project_name ]
+  in
 
   (* Ensure fixtures directory exists *)
-  let _ = Sys.command "mkdir -p test/fixtures" in
+  let _ =
+    Sys.command
+      (Printf.sprintf "mkdir -p %s" (Filename.quote (Filename.dirname reference_output)))
+  in
 
   (* Run rescriptdep to generate current output in temp file *)
   let temp_output = run_rescriptdep_to_temp project_dir in

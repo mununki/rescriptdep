@@ -1,13 +1,24 @@
+(library
+ (name test_support)
+ (modules test_support))
+
 (tests
+ (names test_namespace)
+ (modules test_namespace)
+ (libraries rescriptdep))
+
+(executables
  (names
   test_rescriptdep
   test_cmt_imports
   test_cmt_values
-  test_ast
-  test_namespace)
- (libraries rescriptdep str)
- (deps
-  (glob_files fixtures/*.cmt)))
+  test_ast)
+ (modules
+  test_rescriptdep
+  test_cmt_imports
+  test_cmt_values
+  test_ast)
+ (libraries rescriptdep str test_support))
 
 (executable
  (name benchmark)
