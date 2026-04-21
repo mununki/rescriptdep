@@ -72,6 +72,11 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
+### 0.8.3
+
+- Fixed focused dependency graphs for ReScript namespace builds that generate compiled module names with namespace suffixes such as `DOMAPI-WebAPI`
+- Restored internal module edges in focused graphs for namespaced projects so module dependency views no longer collapse to an empty result
+
 ### 0.8.2
 
 - Refreshed the macOS extension release pipeline so bundled CLI builds are produced from the default Apple Silicon runner again

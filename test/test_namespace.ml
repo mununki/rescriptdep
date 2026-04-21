@@ -16,6 +16,9 @@ let test_normalize_module_name () =
     = "NS_alias")
     "Expected namespaced module name to normalize to its plain module name";
   assert_true
+    (Rescriptdep.Parse_utils.normalize_module_name "DOMAPI-WebAPI" = "DOMAPI")
+    "Expected generated namespaced module names to normalize to their source module name";
+  assert_true
     (Rescriptdep.Parse_utils.normalize_module_name "dep01" = "Dep01")
     "Expected plain module name normalization to keep existing behavior"
 
@@ -23,6 +26,9 @@ let test_is_valid_module_name () =
   assert_true
     (Rescriptdep.Parse_utils.is_valid_module_name "NewNamespace.NS_alias")
     "Expected namespaced module name to be treated as a valid module";
+  assert_true
+    (Rescriptdep.Parse_utils.is_valid_module_name "DOMAPI-WebAPI")
+    "Expected generated namespaced module names to be treated as valid modules";
   assert_true
     (not (Rescriptdep.Parse_utils.is_valid_module_name "not-a-module"))
     "Expected invalid module name to remain invalid"
@@ -92,6 +98,7 @@ let test_batch_check_matches_canonical_and_qualified_ast_entries () =
   Fun.protect
     (fun () ->
       write_ast_fixture ast_path [ "NS_alias" ];
+      Rescriptdep.Parser.Cache.clear ();
       let deps_from_canonical_ast =
         Rescriptdep.Parser.DependencyExtractor.batch_check_modules_usage
           source_file [ "NewNamespace.NS_alias" ]
@@ -101,13 +108,24 @@ let test_batch_check_matches_canonical_and_qualified_ast_entries () =
         "Expected namespaced imports to match canonical AST entries";
 
       write_ast_fixture ast_path [ "NewNamespace.NS_alias" ];
+      Rescriptdep.Parser.Cache.clear ();
       let deps_from_qualified_ast =
         Rescriptdep.Parser.DependencyExtractor.batch_check_modules_usage
           source_file [ "NewNamespace.NS_alias" ]
       in
       assert_true
         (deps_from_qualified_ast = [ "NewNamespace.NS_alias" ])
-        "Expected namespaced imports to match qualified AST entries")
+        "Expected namespaced imports to match qualified AST entries";
+
+      write_ast_fixture ast_path [ "DOMAPI" ];
+      Rescriptdep.Parser.Cache.clear ();
+      let deps_from_generated_suffix =
+        Rescriptdep.Parser.DependencyExtractor.batch_check_modules_usage
+          source_file [ "DOMAPI-WebAPI" ]
+      in
+      assert_true
+        (deps_from_generated_suffix = [ "DOMAPI-WebAPI" ])
+        "Expected generated namespaced module names to match canonical AST entries")
     ~finally:(fun () ->
       (try Sys.remove source_file with _ -> ());
       (try Sys.remove ast_path with _ -> ()))

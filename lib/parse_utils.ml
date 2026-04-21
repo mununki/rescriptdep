@@ -10,9 +10,37 @@ let strip_module_namespace name =
       String.sub name (idx + 1) (String.length name - idx - 1)
   | _ -> name
 
+(* Strip the generated namespace suffix that ReScript appends to compiled
+   module names, e.g. "DOMAPI-WebAPI" -> "DOMAPI". *)
+let strip_generated_namespace_suffix name =
+  let is_valid_suffix_char c =
+    (c >= 'A' && c <= 'Z')
+    || (c >= 'a' && c <= 'z')
+    || (c >= '0' && c <= '9')
+    || c = '_'
+  in
+  match String.rindex_opt name '-' with
+  | Some idx when idx > 0 && idx + 1 < String.length name ->
+      let prefix = String.sub name 0 idx in
+      let suffix = String.sub name (idx + 1) (String.length name - idx - 1) in
+      if
+        suffix.[0] >= 'A'
+        && suffix.[0] <= 'Z'
+        &&
+        let valid = ref true in
+        String.iter
+          (fun c -> if not (is_valid_suffix_char c) then valid := false)
+          suffix;
+        !valid
+      then prefix
+      else name
+  | _ -> name
+
 (* Normalize module name to ensure consistent casing *)
 let normalize_module_name name =
-  let name = strip_module_namespace name in
+  let name =
+    name |> strip_module_namespace |> strip_generated_namespace_suffix
+  in
   (* Ensure first letter is uppercase and rest is preserved *)
   if String.length name > 0 then
     String.make 1 (Char.uppercase_ascii name.[0])
@@ -172,7 +200,9 @@ let is_stdlib_or_internal_module name =
 
 (* Check if a string is a valid module name *)
 let is_valid_module_name str =
-  let str = strip_module_namespace str in
+  let str =
+    str |> strip_module_namespace |> strip_generated_namespace_suffix
+  in
   (* Basic validation for a module name: starts with capital letter, only contains valid chars *)
   String.length str > 0
   && str.[0] >= 'A'
