@@ -52,10 +52,14 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Listen for cursor movement in .res files
   vscode.window.onDidChangeTextEditorSelection(async (event) => {
-    if (!isValueUsageCountEnabled) return;
+    if (!isValueUsageCountEnabled) {
+      return;
+    }
     const editor = event.textEditor;
     const document = editor.document;
-    if (document.languageId !== 'rescript' || !document.fileName.endsWith('.res')) return;
+    if (document.languageId !== 'rescript' || !document.fileName.endsWith('.res')) {
+      return;
+    }
 
     // Get current cursor line
     const position = editor.selection.active;
