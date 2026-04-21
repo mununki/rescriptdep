@@ -72,6 +72,11 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
+### 0.8.2
+
+- Refreshed the macOS extension release pipeline so bundled CLI builds are produced from the default Apple Silicon runner again
+- Improved release stability for macOS users by aligning the packaged CLI with the current GitHub Actions macOS environment
+
 ### 0.8.1
 
 - Fixed focused module dependency analysis for ReScript namespace projects
