@@ -92,6 +92,27 @@ let test_focus_with_namespaced_input () =
     (modules = [ "Dep01"; "NS_alias" ])
     "Expected focus mode to resolve namespaced input to the existing module"
 
+let test_dependency_graph_dependents_index_updates () =
+  let graph =
+    Rescriptdep.Dependency_graph.empty
+    |> fun graph ->
+    Rescriptdep.Dependency_graph.add graph "Consumer" [ "Dep01" ] None
+    |> fun graph -> Rescriptdep.Dependency_graph.add graph "Dep01" [] None
+  in
+  assert_true
+    (Rescriptdep.Dependency_graph.find_dependents graph "Dep01" = [ "Consumer" ])
+    "Expected dependents index to include direct dependent";
+
+  let graph =
+    Rescriptdep.Dependency_graph.add graph "Consumer" [ "Dep02" ] None
+  in
+  assert_true
+    (Rescriptdep.Dependency_graph.find_dependents graph "Dep01" = [])
+    "Expected dependents index to drop stale dependencies after module update";
+  assert_true
+    (Rescriptdep.Dependency_graph.find_dependents graph "Dep02" = [ "Consumer" ])
+    "Expected dependents index to include updated dependency"
+
 let test_batch_check_matches_canonical_and_qualified_ast_entries () =
   let source_file = Filename.temp_file "rescriptdep-namespace" ".res" in
   let ast_path = Filename.remove_extension source_file ^ ".ast" in
@@ -135,5 +156,6 @@ let () =
   test_is_valid_module_name ();
   test_extract_dependencies_from_namespaced_imports ();
   test_focus_with_namespaced_input ();
+  test_dependency_graph_dependents_index_updates ();
   test_batch_check_matches_canonical_and_qualified_ast_entries ();
   print_endline "Namespace handling tests passed"

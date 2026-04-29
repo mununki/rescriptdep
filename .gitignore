@@ -1,4 +1,5 @@
 _build
+_opam
 deps.dot
 deps.json
 .DS_Store

@@ -21,6 +21,135 @@ let isValueUsageCountEnabled: boolean = true;
 // Store the current usage count decoration
 let usageCountDecoration: vscode.TextEditorDecorationType | undefined = undefined;
 let lastDecoratedLine: number | undefined = undefined;
+let usageCountDebounceTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+let usageCountRequestSerial = 0;
+
+const VALUE_USAGE_DEBOUNCE_MS = 350;
+const VALUE_USAGE_CACHE_TTL_MS = 30000;
+const usageCountCache = new Map<string, { count: string; timestamp: number }>();
+
+function clearUsageCountDecoration(editor?: vscode.TextEditor) {
+  if (usageCountDecoration) {
+    editor?.setDecorations(usageCountDecoration, []);
+    usageCountDecoration.dispose();
+    usageCountDecoration = undefined;
+  }
+  lastDecoratedLine = undefined;
+}
+
+function setUsageCountDecoration(editor: vscode.TextEditor, line: number, usageCount: string) {
+  clearUsageCountDecoration(editor);
+
+  usageCountDecoration = vscode.window.createTextEditorDecorationType({
+    isWholeLine: true,
+    after: {
+      contentText: `Used ${usageCount} times`,
+      color: '#b5cea8',
+      margin: '0 0 0 8px',
+      fontStyle: 'italic',
+    },
+  });
+  editor.setDecorations(usageCountDecoration, [
+    { range: new vscode.Range(line, 0, line, 0) }
+  ]);
+  lastDecoratedLine = line;
+}
+
+function parseValueUsageCount(output: string): string {
+  try {
+    const parsed = JSON.parse(output) as { modules?: Array<{ count?: number }> };
+    if (!Array.isArray(parsed.modules)) {
+      return '?';
+    }
+    const total = parsed.modules.reduce((sum, module) => sum + (typeof module.count === 'number' ? module.count : 0), 0);
+    return String(total);
+  } catch (error) {
+    console.log('[Bibimbob] Could not parse value usage JSON output:', error, output);
+    return '?';
+  }
+}
+
+async function updateValueUsageDecoration(
+  context: vscode.ExtensionContext,
+  editor: vscode.TextEditor,
+  line: number,
+  valueName: string,
+  documentVersion: number
+) {
+  const document = editor.document;
+  if (document.languageId !== 'rescript' || !document.fileName.endsWith('.res') || line >= document.lineCount) {
+    return;
+  }
+
+  if (document.version !== documentVersion || editor.selection.active.line !== line) {
+    return;
+  }
+
+  const lineText = document.lineAt(line).text;
+  const letLineRegex = /^\s*let\s+([a-zA-Z_][a-zA-Z0-9_]*)\b[^=]*=/;
+  const match = letLineRegex.exec(lineText);
+  if (!match || match[1] !== valueName) {
+    clearUsageCountDecoration(editor);
+    return;
+  }
+
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders) {
+    console.log('[Bibimbob] No workspace folders found');
+    return;
+  }
+
+  const fileName = document.fileName;
+  const workspaceRoot = workspaceFolders[0].uri.fsPath;
+  const projectRoot = await findProjectRootForFile(fileName, workspaceRoot) || workspaceRoot;
+  const bsDir = path.join(projectRoot, 'lib', 'bs');
+  const sourceMtime = fs.existsSync(fileName) ? fs.statSync(fileName).mtimeMs : 0;
+  const bsMtime = fs.existsSync(bsDir) ? fs.statSync(bsDir).mtimeMs : 0;
+  const cacheKey = [projectRoot, fileName, sourceMtime, bsMtime, documentVersion, line + 1, valueName].join(':');
+  const cached = usageCountCache.get(cacheKey);
+  const now = Date.now();
+
+  if (cached && now - cached.timestamp < VALUE_USAGE_CACHE_TTL_MS) {
+    setUsageCountDecoration(editor, line, cached.count);
+    return;
+  }
+
+  const requestSerial = ++usageCountRequestSerial;
+  const moduleName = path.basename(fileName, '.res');
+  const lineNumber = line + 1;
+  const args = ['-m', moduleName, '-vb', valueName, '-vl', String(lineNumber), '-f', 'json', bsDir];
+
+  let usageCount = '?';
+  try {
+    const cliPath = await findRescriptDepCLI(context);
+    console.log('[Bibimbob] Running CLI:', cliPath, args);
+    const result = await runRescriptDep(cliPath, args);
+    usageCount = parseValueUsageCount(result);
+    usageCountCache.set(cacheKey, { count: usageCount, timestamp: Date.now() });
+  } catch (err) {
+    usageCount = 'error';
+    console.log('[Bibimbob] CLI call failed:', err);
+  }
+
+  if (
+    requestSerial !== usageCountRequestSerial
+    || vscode.window.activeTextEditor !== editor
+    || document.version !== documentVersion
+    || editor.selection.active.line !== line
+    || line >= document.lineCount
+  ) {
+    return;
+  }
+
+  const currentLineText = document.lineAt(line).text;
+  const currentMatch = letLineRegex.exec(currentLineText);
+  if (!currentMatch || currentMatch[1] !== valueName) {
+    return;
+  }
+
+  setUsageCountDecoration(editor, line, usageCount);
+  console.log('[Bibimbob] Decoration set for line', line, '(after let declaration)');
+}
 
 export function activate(context: vscode.ExtensionContext) {
   // Command for full dependency graph
@@ -41,8 +170,15 @@ export function activate(context: vscode.ExtensionContext) {
   // Command to toggle value usage count display
   let toggleValueUsageCountCommand = vscode.commands.registerCommand(TOGGLE_VALUE_USAGE_COUNT, () => {
     isValueUsageCountEnabled = !isValueUsageCountEnabled;
+    if (!isValueUsageCountEnabled) {
+      if (usageCountDebounceTimer) {
+        clearTimeout(usageCountDebounceTimer);
+        usageCountDebounceTimer = undefined;
+      }
+      usageCountRequestSerial++;
+      clearUsageCountDecoration(vscode.window.activeTextEditor);
+    }
     vscode.window.showInformationMessage(`Value usage count display is now ${isValueUsageCountEnabled ? 'enabled' : 'disabled'}.`);
-    // Optionally trigger update/decorate here in later steps
   });
 
   context.subscriptions.push(fullGraphCommand);
@@ -50,8 +186,15 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(unusedModulesCommand);
   context.subscriptions.push(toggleValueUsageCountCommand);
 
+  context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(event => {
+    if (event.document.languageId === 'rescript') {
+      usageCountCache.clear();
+      usageCountRequestSerial++;
+    }
+  }));
+
   // Listen for cursor movement in .res files
-  vscode.window.onDidChangeTextEditorSelection(async (event) => {
+  context.subscriptions.push(vscode.window.onDidChangeTextEditorSelection((event) => {
     if (!isValueUsageCountEnabled) {
       return;
     }
@@ -74,81 +217,25 @@ export function activate(context: vscode.ExtensionContext) {
     // Remove previous decoration if cursor moved away
     if (usageCountDecoration && (lastDecoratedLine !== position.line || !match)) {
       console.log('[Bibimbob] Removing previous decoration');
-      editor.setDecorations(usageCountDecoration, []);
-      usageCountDecoration.dispose();
-      usageCountDecoration = undefined;
-      lastDecoratedLine = undefined;
+      clearUsageCountDecoration(editor);
+    }
+
+    if (usageCountDebounceTimer) {
+      clearTimeout(usageCountDebounceTimer);
+      usageCountDebounceTimer = undefined;
     }
 
     if (match) {
-      // Extract only the let name to use as valueName
-      const fileName = document.fileName;
-      const moduleName = path.basename(fileName, '.res');
       const valueName = match[1];
-
-      // Find CLI path and bsDir
-      const workspaceFolders = vscode.workspace.workspaceFolders;
-      if (!workspaceFolders) {
-        console.log('[Bibimbob] No workspace folders found');
-        return;
-      }
-      const context = { extensionPath: vscode.extensions.getExtension('mununki.vscode-bibimbob')?.extensionPath || '' } as vscode.ExtensionContext;
-      const cliPath = await findRescriptDepCLI(context);
-      const workspaceRoot = workspaceFolders[0].uri.fsPath;
-      const projectRoot = await findProjectRootForFile(fileName, workspaceRoot) || workspaceRoot;
-      const bsDir = path.join(projectRoot, 'lib', 'bs');
-
-      // Run CLI to get usage count (add -f dot flag)
-      // Pass the line number of the let declaration as -vl <line> (1-based)
-      const lineNumber = position.line + 1;
-      const args = ['-m', moduleName, '-vb', valueName, '-vl', String(lineNumber), '-f', 'dot', bsDir];
-      let usageCount = '?';
-      try {
-        console.log('[Bibimbob] Running CLI:', cliPath, args);
-        const result = await runRescriptDep(cliPath, args);
-        console.log('[Bibimbob] CLI output:', result);
-        // Improved regex: match all [label="...\ncount: N"]
-        const allCounts = Array.from(result.matchAll(/\[label=\"[^\"]*\\ncount: (\d+)\"\]/g));
-        if (allCounts.length > 0) {
-          allCounts.forEach((m, i) => {
-            console.log(`[Bibimbob] Matched DOT line #${i + 1}:`, m[0], 'Count:', m[1]);
-          });
-          const total = allCounts.reduce((sum, m) => sum + parseInt(m[1], 10), 0);
-          usageCount = String(total);
-          console.log('[Bibimbob] Summed usage count:', usageCount);
-        } else {
-          usageCount = '?';
-          console.log('[Bibimbob] Could not parse any usage count from DOT output. Full output:', result);
-        }
-      } catch (err) {
-        usageCount = 'error';
-        console.log('[Bibimbob] CLI call failed:', err);
-      }
-
-      // Create and show decoration at the end of the let declaration line
-      const decoText = `Used ${usageCount} times`;
-      // Dispose previous decoration if exists
-      if (usageCountDecoration) {
-        editor.setDecorations(usageCountDecoration, []);
-        usageCountDecoration.dispose();
-      }
-      usageCountDecoration = vscode.window.createTextEditorDecorationType({
-        isWholeLine: true,
-        after: {
-          contentText: decoText,
-          color: '#b5cea8',
-          margin: '0 0 0 8px',
-          fontStyle: 'italic',
-        },
-      });
-      const decoLine = position.line;
-      editor.setDecorations(usageCountDecoration, [
-        { range: new vscode.Range(decoLine, 0, decoLine, 0) }
-      ]);
-      lastDecoratedLine = position.line;
-      console.log('[Bibimbob] Decoration set for line', decoLine, '(after let declaration)');
+      const documentVersion = document.version;
+      usageCountDebounceTimer = setTimeout(() => {
+        usageCountDebounceTimer = undefined;
+        updateValueUsageDecoration(context, editor, position.line, valueName, documentVersion).catch(error => {
+          console.log('[Bibimbob] Failed to update value usage decoration:', error);
+        });
+      }, VALUE_USAGE_DEBOUNCE_MS);
     }
-  });
+  }));
 }
 
 // Helper function to get current module name from active editor

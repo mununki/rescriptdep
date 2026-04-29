@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Added regression coverage for dependency graph dependent-index updates
+
+### Changed
+- Improved dependency graph performance by maintaining a reverse dependent index instead of scanning the full graph for each dependent lookup
+- Reduced VS Code inline value usage analysis work with debounced requests, short-lived result caching, and JSON output parsing
+
+### Fixed
+- Prevented stale VS Code inline value usage decorations from appearing after source edits or outdated CLI responses
+- Improved inline value usage cache invalidation when ReScript build artifacts change
 
 ## [0.1.2] - 2026-04-22
 ### Fixed

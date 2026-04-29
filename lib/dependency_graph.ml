@@ -10,17 +10,66 @@ type module_metadata = { path : string option }
 (* Graph representation including module metadata *)
 type t = {
   dependencies : string list StringMap.t;
+  dependents : string list StringMap.t;
   metadata : module_metadata StringMap.t;
 }
 
 (* Empty graph *)
-let empty = { dependencies = StringMap.empty; metadata = StringMap.empty }
+let empty =
+  {
+    dependencies = StringMap.empty;
+    dependents = StringMap.empty;
+    metadata = StringMap.empty;
+  }
+
+let add_dependent dependents dependency module_name =
+  let current =
+    try StringMap.find dependency dependents with Not_found -> []
+  in
+  let updated =
+    if List.mem module_name current then current else module_name :: current
+  in
+  StringMap.add dependency updated dependents
+
+let remove_dependent dependents dependency module_name =
+  match StringMap.find_opt dependency dependents with
+  | None -> dependents
+  | Some current ->
+      let updated = List.filter (fun m -> m <> module_name) current in
+      if updated = [] then StringMap.remove dependency dependents
+      else StringMap.add dependency updated dependents
+
+let build_dependents dependencies =
+  StringMap.fold
+    (fun module_name deps dependents ->
+      List.fold_left
+        (fun acc dep -> add_dependent acc dep module_name)
+        dependents deps)
+    dependencies StringMap.empty
+
+let make dependencies metadata =
+  { dependencies; dependents = build_dependents dependencies; metadata }
 
 (* Add a module and its dependencies to the graph *)
 let add graph module_name dependencies path =
   let metadata = { path } in
+  let dependencies = List.sort_uniq String.compare dependencies in
+  let dependents =
+    match StringMap.find_opt module_name graph.dependencies with
+    | None -> graph.dependents
+    | Some old_dependencies ->
+        List.fold_left
+          (fun acc dep -> remove_dependent acc dep module_name)
+          graph.dependents old_dependencies
+  in
+  let dependents =
+    List.fold_left
+      (fun acc dep -> add_dependent acc dep module_name)
+      dependents dependencies
+  in
   {
     dependencies = StringMap.add module_name dependencies graph.dependencies;
+    dependents;
     metadata = StringMap.add module_name metadata graph.metadata;
   }
 
@@ -53,9 +102,9 @@ let get_modules graph = StringMap.bindings graph.dependencies |> List.map fst
 
 (* Find direct dependents of a module (modules that depend on it) *)
 let find_dependents graph module_name =
-  StringMap.fold
-    (fun m deps acc -> if List.mem module_name deps then m :: acc else acc)
-    graph.dependencies []
+  match StringMap.find_opt module_name graph.dependents with
+  | Some dependents -> List.sort_uniq String.compare dependents
+  | None -> []
 
 (* Check if a cycle exists in the dependency graph starting from a module *)
 let has_cycle graph start_module =
@@ -274,14 +323,14 @@ let create_filtered_graph graph =
   let filtered_deps = create_subgraph_preserve_deps graph project_modules in
 
   (* Create a new graph with the filtered dependencies and original metadata *)
-  { dependencies = filtered_deps; metadata = graph.metadata }
+  make filtered_deps graph.metadata
 
 (* Create a focused graph centered around a specific module *)
 let create_focused_graph graph center_module =
   (* Check if the module exists *)
   if not (StringMap.mem center_module graph.dependencies) then
     (* Return empty graph if module doesn't exist *)
-    { dependencies = StringMap.empty; metadata = StringMap.empty }
+    empty
   else
     (* 1. Get the center module dependencies *)
     let center_deps = get_dependencies graph center_module in
@@ -295,12 +344,7 @@ let create_focused_graph graph center_module =
     (* 3. Start building a new graph with just the center module *)
     (* Preserve metadata - add center module *)
     let center_metadata = get_module_metadata graph center_module in
-    let result =
-      {
-        dependencies = StringMap.singleton center_module center_deps;
-        metadata = StringMap.singleton center_module center_metadata;
-      }
-    in
+    let result = add empty center_module center_deps center_metadata.path in
 
     (* 4. Add dependency modules and their metadata *)
     let result =
