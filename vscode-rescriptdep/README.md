@@ -72,6 +72,12 @@ This extension doesn't require any specific settings.
 
 ## Release Notes
 
+### 0.8.4
+
+- Improved dependency lookup performance with a reverse dependent index
+- Reduced inline value usage analysis work with debounced and cached requests
+- Prevented stale inline value usage annotations after source edits or outdated analysis responses
+
 ### 0.8.3
 
 - Fixed focused dependency graphs for ReScript namespace builds that generate compiled module names with namespace suffixes such as `DOMAPI-WebAPI`
