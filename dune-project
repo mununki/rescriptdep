@@ -23,7 +23,7 @@
   "A tool to analyze dependencies between ReScript modules using cmi files")
  (depends
   (ocaml
-   (= 5.3.0))
+   (>= 5.3.0))
   dune
   eio
   eio_main
