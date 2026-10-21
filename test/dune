@@ -3,8 +3,8 @@
  (modules test_support))
 
 (tests
- (names test_namespace)
- (modules test_namespace)
+ (names test_namespace test_compilers)
+ (modules test_namespace test_compilers)
  (libraries rescriptdep))
 
 (executables

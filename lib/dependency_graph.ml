@@ -517,13 +517,14 @@ let find_cmt_path metadata =
       | None -> None)
 
 let read_typed_implementation cmt_path =
-  let cmt_info = Cmt_format.read_cmt cmt_path in
-  ( Typed_ast.implementation cmt_info,
+  let compiler, cmt_info = Compilers.read_cmt cmt_path in
+  ( Compilers.implementation compiler cmt_info,
     namespace_of_modname cmt_info.Cmt_format.cmt_modname )
 
 (* Count value usage in dependents of a module (and in the module itself).
    Negative counts report why a module could not be analyzed:
-   -2 no implementation, -3 unreadable CMT, -4 no CMT file, -5 no file path. *)
+   -2 no implementation, -3 unreadable CMT, -4 no CMT file, -5 no file path,
+   -6 compiler not supported by value usage analysis. *)
 let count_value_usage_in_dependents graph ~module_name ~value_name ~value_line =
   let dependents =
     List.sort_uniq String.compare
@@ -585,5 +586,7 @@ let count_value_usage_in_dependents graph ~module_name ~value_name ~value_line =
                       | _ -> 0)
                 in
                 (dep, count)
-          with _ -> (dep, -3)))
+          with
+          | Compilers.Unsupported _ -> (dep, -6)
+          | _ -> (dep, -3)))
     dependents

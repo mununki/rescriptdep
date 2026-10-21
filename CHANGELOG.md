@@ -10,8 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added regression coverage for dependency graph dependent-index updates
 - Added ReScript 12 support for value usage analysis (`-vb`) by decoding typed trees with the layout of the compiler that wrote each `.cmt` file
 - Added ReScript 12 fixture projects (standard and namespaced) with dependency graph and value usage regression tests
+- Added ReScript 13 (13.0.0-alpha.6) support for dependency analysis; value usage analysis reports `-6` for modules built by compilers it cannot decode yet
+- Added ReScript 13 fixture projects and self-contained compiler identification tests
+- Added a supported ReScript versions table to the README
 
 ### Changed
+- Organized typed tree decoding into one backend per compiler release (`Compiler_v11`, `Compiler_v12`) selected by the CMT magic number and `cmt_infos` layout, with decoders skipping constructors added by later releases instead of misreading them
+- `.cmt` files written by unknown compilers now stop the analysis with an error instead of silently producing an empty graph
 - Improved dependency graph performance by maintaining a reverse dependent index instead of scanning the full graph for each dependent lookup
 - Reduced VS Code inline value usage analysis work with debounced requests, short-lived result caching, and JSON output parsing
 

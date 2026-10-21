@@ -42,6 +42,7 @@ The test code is located in the `test/` directory and includes:
 - `test_rescriptdep.ml`: Tests the dependency analysis on sample ReScript projects
 - `test_value_usage.ml`: Tests value usage counts on ReScript 11 and 12 projects
 - `test_namespace.ml`: Tests namespace handling without compiled fixtures
+- `test_compilers.ml`: Tests compiler identification and typed tree decoder guards without compiled fixtures
 - `benchmark.ml`: Performance benchmark for the parser
 
 ### Test Fixtures
@@ -55,6 +56,7 @@ The dependency analysis tests use JSON fixtures to ensure consistent behavior:
 - `test/fixtures/rescript.json`: Reference output for the ReScript 11 test project
 - `test/fixtures/rescript12_basic.json`: Reference output for the ReScript 12 test project
 - `test/fixtures/rescript12_namespaced.json`: Reference output for the namespaced ReScript 12 test project
+- `test/fixtures/rescript13_basic.json`, `test/fixtures/rescript13_namespaced.json`: The same for ReScript 13
 
 These fixtures are automatically generated on first run and serve as reference points for future test runs. If the dependency analysis output differs from these fixtures, the test will fail and show a diff of the changes.
 
@@ -66,6 +68,11 @@ The test directory contains sample ReScript projects used for testing the depend
 - `test/rescript12/`: pnpm workspace with ReScript 12 projects built from the same sources:
   `basic/` (standard setup) and `namespaced/` (`"namespace": true`). `math.res` is
   named `mathUtil.res` there because ReScript 12 resolves `Math` to `Stdlib.Math`.
+- `test/rescript13/`: The same workspace for ReScript 13, with `Belt` calls replaced by
+  `Stdlib` ones since ReScript 13 no longer ships `Belt`.
+
+The packages of a workspace share their compiled dependencies, so `res:build` builds them
+one at a time (`--workspace-concurrency=1`); parallel builds corrupt the shared `.cmi` files.
 
 Each test project contains:
 - `src/`: Source code files (.res, .resi)
@@ -83,6 +90,25 @@ When making changes that affect dependency analysis:
    - Delete the existing fixture file, e.g. `rm test/fixtures/rescript.json`
    - Run the tests again to generate new fixtures: `dune exec test/test_rescriptdep.exe`
    - Commit both the code changes and the updated fixtures
+
+### Supporting a New ReScript Release
+
+`.cmt` files are marshalled OCaml values without type information, so they must be read with
+type definitions whose constructor order and arity match the compiler exactly. Only the typed
+tree used by value usage analysis (`-vb`) differs between the supported releases; the fields of
+`cmt_infos` used by the dependency graph and the `.ast` header format are shared.
+
+To add a release:
+
+1. Add an entry to `all` in `lib/compilers.ml` with the release's CMT magic number (in
+   `compiler/ext/config.ml` of the ReScript repository) and the number of fields of its
+   `cmt_infos` record. This is enough for the dependency graph.
+2. For value usage analysis, vendor the parts of its `compiler/ml/typedtree.mli` that are
+   decoded as `vendor/typedtree_vNN.ml`, keeping every constructor in order, and add a
+   `lib/compiler_vNN.ml` decoder with its constructor counts. `test/test_compilers.ml` checks
+   that the counts match the vendored definitions.
+3. Add a fixture workspace (`test/rescriptNN/`), its reference JSON fixtures, and the project
+   to `test/test_rescriptdep.ml`, `test/test_value_usage.ml` and the `Makefile`.
 
 ### Running the Benchmark
 

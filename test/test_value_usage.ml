@@ -1,9 +1,10 @@
 open Stdlib
 open Printf
 
-(* Value usage counts (-vb) for the same sources compiled by ReScript 11 and
-   ReScript 12. Reading a CMT file with the wrong typedtree layout used to
-   crash the process, so every project must give the same counts. *)
+(* Value usage counts (-vb) for the same sources compiled by ReScript 11, 12
+   and 13. Reading a CMT file with the wrong typedtree layout used to crash
+   the process, so every supported project must give the same counts, and
+   projects built by an unsupported compiler must report it without crashing. *)
 
 let count_usage bs_dir ~module_name ~value_name ~value_line =
   Rescriptdep.Parser.clear_cache ();
@@ -17,6 +18,16 @@ let count_usage bs_dir ~module_name ~value_name ~value_line =
   Rescriptdep.Dependency_graph.count_value_usage_in_dependents focused_graph
     ~module_name ~value_name ~value_line:(Some value_line)
 
+let find_bs_dir project =
+  Test_support.require_existing_path
+    ~hint:
+      "Compiled ReScript fixture project not found. Run `make test` to install \
+       the fixture dependencies and build `lib/bs` first."
+    [
+      Printf.sprintf "%s/lib/bs" project;
+      Printf.sprintf "test/%s/lib/bs" project;
+    ]
+
 let format_counts counts =
   counts
   |> List.map (fun (name, count) -> sprintf "%s=%d" name count)
@@ -25,16 +36,7 @@ let format_counts counts =
 (* [math_module] is the module defined by math.res (v11) / mathUtil.res (v12):
    ReScript 12 resolves "Math" to Stdlib.Math. *)
 let test_project project ~math_module =
-  let bs_dir =
-    Test_support.require_existing_path
-      ~hint:
-        "Compiled ReScript fixture project not found. Run `make test` to \
-         install the fixture dependencies and build `lib/bs` first."
-      [
-        Printf.sprintf "%s/lib/bs" project;
-        Printf.sprintf "test/%s/lib/bs" project;
-      ]
-  in
+  let bs_dir = find_bs_dir project in
   printf "=== Value usage in %s ===\n" project;
   let cases =
     [
@@ -67,8 +69,19 @@ let test_project project ~math_module =
         false))
     cases
 
+(* Value usage analysis does not decode ReScript 13 typed trees yet; every
+   module must report -6 (unsupported compiler) instead of a count *)
+let test_unsupported_project project =
+  printf "=== Value usage in %s (unsupported) ===\n" project;
+  let counts =
+    count_usage (find_bs_dir project) ~module_name:"Utils"
+      ~value_name:"multiply" ~value_line:2
+  in
+  printf "  Utils.multiply@2: %s\n" (format_counts counts);
+  counts <> [] && List.for_all (fun (_, count) -> count = -6) counts
+
 let () =
-  let results =
+  let supported =
     [
       ("rescript", "Math");
       ("rescript12/basic", "MathUtil");
@@ -77,4 +90,8 @@ let () =
     |> List.map (fun (project, math_module) ->
         test_project project ~math_module)
   in
-  exit (if List.for_all Fun.id results then 0 else 1)
+  let unsupported =
+    [ "rescript13/basic"; "rescript13/namespaced" ]
+    |> List.map test_unsupported_project
+  in
+  exit (if List.for_all Fun.id (supported @ unsupported) then 0 else 1)

@@ -43,6 +43,23 @@ rescriptdep [options] files_or_dirs
 # -vl, --value-line <line>    : Line number of the value binding (1-based, for disambiguation when multiple bindings have the same name; use with -vb)
 ```
 
+`files_or_dirs` are compiled `.cmt` files or directories that contain them, usually the project's `lib/bs`.
+
+With `-vb`, each module reports its usage count, or a negative code when it could not be analyzed:
+`-2` no implementation, `-3` unreadable `.cmt` file, `-4` no `.cmt` file, `-5` no file path,
+`-6` the compiler that built the module is not supported by value usage analysis.
+
+## Supported ReScript Versions
+
+| ReScript | Dependency graph | Value usage (`-vb`) |
+|---|---|---|
+| 11.0.0 - 11.1.4 | Yes | Yes |
+| 12.0.0 - 12.3.1 | Yes | Yes |
+| 13.0.0-alpha.6 | Yes | Not yet (`-6`) |
+
+rescriptdep identifies the compiler from each `.cmt` file. Files written by other compilers are
+rejected with an error instead of being misread.
+
 ## Development
 
 For detailed information about building the project, running tests, and contributing, please see [CONTRIBUTING.md](CONTRIBUTING.md).

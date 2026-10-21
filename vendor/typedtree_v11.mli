@@ -18,9 +18,10 @@
 (** By comparison with {!Parsetree}:
     - Every {!Longindent.t} is accompanied by a resolved {!Path.t}. *)
 
-(* This mirrors the typedtree layout written by ReScript 11 and earlier. CMT
-   files are read with [input_value], so constructor order and arity must match
-   the compiler exactly. ReScript 12 uses {!Typedtree_v12}. *)
+(* This mirrors the typedtree layout written by ReScript 11 (11.0.0 - 11.1.4,
+   jscomp/ml/typedtree.mli). CMT files are read with [input_value], so
+   constructor order and arity must match the compiler exactly. ReScript 12
+   uses {!Typedtree_v12}. *)
 
 open Types
 

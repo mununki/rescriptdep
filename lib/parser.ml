@@ -762,7 +762,7 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
   try
     (* Check if file has a cached version with matching digests *)
     let cmt_info =
-      try Cmt_format.read_cmt path
+      try snd (Compilers.read_cmt path)
       with Cmt_format.Error msg ->
         (* Provide more detailed error information *)
         if verbose then
@@ -847,7 +847,7 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
 
         module_info
   with
-  | Invalid_cmt_file _ as e -> raise e
+  | (Invalid_cmt_file _ | Compilers.Unsupported _) as e -> raise e
   | Sys_error msg ->
       raise
         (Invalid_cmt_file (Printf.sprintf "System error with %s: %s" path msg))

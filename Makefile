@@ -15,10 +15,12 @@ check-pnpm:
 install-test-deps:
 	CI=1 pnpm --dir test/rescript install --frozen-lockfile
 	CI=1 pnpm --dir test/rescript12 install --frozen-lockfile
+	CI=1 pnpm --dir test/rescript13 install --frozen-lockfile
 
 build-test-projects:
 	pnpm --dir test/rescript run res:build
 	pnpm --dir test/rescript12 run res:build
+	pnpm --dir test/rescript13 run res:build
 
 run-ocaml-tests:
 	dune exec ./test/test_cmt_imports.exe
@@ -27,3 +29,4 @@ run-ocaml-tests:
 	dune exec ./test/test_rescriptdep.exe
 	dune exec ./test/test_value_usage.exe
 	dune exec ./test/test_namespace.exe
+	dune exec ./test/test_compilers.exe

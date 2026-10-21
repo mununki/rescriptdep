@@ -1,0 +1,10 @@
+{
+  "name": "rescript13-fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ReScript 13 fixture projects for rescriptdep tests",
+  "scripts": {
+    "res:build": "pnpm -r --workspace-concurrency=1 res:build"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

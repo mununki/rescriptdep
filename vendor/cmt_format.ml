@@ -19,23 +19,15 @@ let read_magic_number ic =
   let len_magic_number = String.length Config.cmt_magic_number in
   really_input_string ic len_magic_number
 
-(* Binary annotations *)
+(* Binary annotations. The typed tree layout depends on the compiler that
+   wrote the file, so the trees are kept opaque here and decoded by a
+   compiler-specific backend. *)
 type binary_annots =
-  | Packed of Types.signature * string list
-  | Implementation of Typedtree.structure
-  | Interface of Typedtree.signature
-  | Partial_implementation of binary_part array
-  | Partial_interface of binary_part array
-
-and binary_part =
-  | Partial_structure of Typedtree.structure
-  | Partial_structure_item of Typedtree.structure_item
-  | Partial_expression of Typedtree.expression
-  | Partial_pattern of Typedtree.pattern
-  | Partial_class_expr of unit
-  | Partial_signature of Typedtree.signature
-  | Partial_signature_item of Typedtree.signature_item
-  | Partial_module_type of Typedtree.module_type
+  | Packed of Obj.t * string list
+  | Implementation of Obj.t
+  | Interface of Obj.t
+  | Partial_implementation of Obj.t
+  | Partial_interface of Obj.t
 
 (* Simplified cmt_infos *)
 type cmt_infos = {
@@ -60,21 +52,29 @@ exception Error of string
 
 let input_cmt ic = (input_value ic : cmt_infos)
 
+(* Several compiler releases write different format versions, so [read]
+   accepts any version and returns the CMT magic number with the infos.
+   Callers must check the version before reading fields of the infos. *)
+let cmi_magic_prefix = "Caml1999I"
+let cmt_magic_prefix = "Caml1999T"
+let has_prefix prefix magic_number = String.starts_with ~prefix magic_number
+
 let read filename =
   (*  Printf.fprintf stderr "Cmt_format.read %s\n%!" filename; *)
   let ic = open_in_bin filename in
   try
     let magic_number = read_magic_number ic in
     let cmi, cmt =
-      if magic_number = Config.cmt_magic_number then (None, Some (input_cmt ic))
-      else if magic_number = Config.cmi_magic_number then
+      if has_prefix cmt_magic_prefix magic_number then
+        (None, Some (magic_number, input_cmt ic))
+      else if has_prefix cmi_magic_prefix magic_number then
         let cmi = Cmi_format.input_cmi ic in
         let cmt =
           try
             let magic_number = read_magic_number ic in
-            if magic_number = Config.cmt_magic_number then
+            if has_prefix cmt_magic_prefix magic_number then
               let cmt = input_cmt ic in
-              Some cmt
+              Some (magic_number, cmt)
             else None
           with _ -> None
         in
@@ -88,10 +88,12 @@ let read filename =
     close_in ic;
     raise e
 
-let read_cmt filename =
+let read_cmt_with_magic filename =
   match read filename with
   | _, None -> raise (Error "Not a typedtree")
   | _, Some cmt -> cmt
+
+let read_cmt filename = snd (read_cmt_with_magic filename)
 
 let read_cmi filename =
   match read filename with

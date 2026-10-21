@@ -40,6 +40,10 @@ let () =
       ( "rescript12/basic/lib/bs/src/app.ast",
         [ "Belt"; "Comp0"; "Logger"; "MathUtil"; "React" ] );
       ("rescript12/namespaced/lib/bs/src/mathUtil.ast", [ "Belt"; "U"; "Utils" ]);
+      ( "rescript13/basic/lib/bs/src/app.ast",
+        [ "Comp0"; "Int"; "Logger"; "MathUtil"; "React" ] );
+      ( "rescript13/namespaced/lib/bs/src/mathUtil.ast",
+        [ "Array"; "U"; "Utils" ] );
     ]
     |> List.map (fun (ast_path, expected) ->
         check_ast_fixture ~candidates:[ ast_path; "test/" ^ ast_path ] ~expected)

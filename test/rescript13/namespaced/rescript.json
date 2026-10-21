@@ -1,0 +1,19 @@
+{
+  "name": "rescript13-namespaced",
+  "namespace": true,
+  "sources": [
+    {
+      "dir": "src",
+      "subdirs": true
+    }
+  ],
+  "package-specs": {
+    "module": "esmodule",
+    "in-source": false
+  },
+  "suffix": ".res.mjs",
+  "dependencies": ["@rescript/react"],
+  "jsx": {
+    "version": 4
+  }
+}

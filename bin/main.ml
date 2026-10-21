@@ -224,7 +224,8 @@ let main () =
       Printf.eprintf "[BENCH] Total execution time: %.4f seconds\n" total_time;
       exit 0)
   with
-  | Rescriptdep.Parser.Invalid_cmt_file msg ->
+  | Rescriptdep.Parser.Invalid_cmt_file msg
+  | Rescriptdep.Compilers.Unsupported msg ->
       Printf.eprintf "Error: %s\n" msg;
       exit 1
   | Sys_error msg ->

@@ -128,6 +128,8 @@ let test_rescriptdep () =
       ("rescript", "rescript");
       ("rescript12/basic", "rescript12_basic");
       ("rescript12/namespaced", "rescript12_namespaced");
+      ("rescript13/basic", "rescript13_basic");
+      ("rescript13/namespaced", "rescript13_namespaced");
     ]
     |> List.map (fun (project_name, fixture_name) ->
            test_project_fixtures ~fixture_name project_name)
