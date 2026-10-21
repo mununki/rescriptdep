@@ -56,13 +56,25 @@ With `-vb`, each module reports its usage count, or a negative code when it coul
 | 11.0.0 - 11.1.4 | Yes | Yes |
 | 12.0.0 - 12.3.1 | Yes | Yes |
 | 13.0.0-alpha.1 - alpha.3, alpha.5, alpha.6 | Yes | Yes |
-| 13.0.0-alpha.4 | Yes | No (`-6`) |
+| 13.0.0-alpha.4 | Yes | No (`-6`), see below |
 
 rescriptdep identifies the compiler from each `.cmt` file and, for ReScript 12 and later, from the
 version rewatch records in `lib/bs/compiler-info.json`. Files in formats no supported compiler
 writes are rejected with an error instead of being misread. Other versions of a supported format
 (for example a later 13.0 prerelease) get the dependency graph, and `-6` from `-vb` until their
 typed tree has been checked.
+
+### ReScript 13.0.0-alpha.4
+
+Value usage analysis (`-vb`, the inline "Used N times" count in the VS Code extension) is not
+supported for projects built with 13.0.0-alpha.4, and every module reports `-6`. The dependency
+graph works as usual.
+
+`-vb` reads the typed tree stored in `.cmt` files, which depends on the exact layout of the
+compiler's data types. 13.0.0-alpha.4 inserted the `for...of` constructors in the middle of the
+expression type, a layout no other release uses: 13.0.0-alpha.5 moved them to the end of the type.
+Rather than keep a decoder for that single prerelease, rescriptdep skips it. Upgrade to
+13.0.0-alpha.5 or later to use value usage analysis.
 
 ## Development
 
