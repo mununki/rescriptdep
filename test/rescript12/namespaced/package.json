@@ -1,0 +1,14 @@
+{
+  "name": "rescript12-namespaced",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "res:build": "rescript build"
+  },
+  "dependencies": {
+    "@rescript/react": "0.15.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "rescript": "12.3.1"
+  }
+}

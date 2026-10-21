@@ -8,6 +8,7 @@ type module_info = {
   interface_digest : Digest.t option;
   implementation_digest : Digest.t option;
   file_path : string option;
+  cmt_path : string option;
 }
 
 (* Cache management module with Eio synchronization *)
@@ -189,6 +190,16 @@ end
 (* Exceptions *)
 exception Invalid_cmt_file of string
 
+(* Namespaced builds compile a generated namespace module ("MyNs.cmt" from
+   "MyNs.mlmap") that aliases every module of the package. It is not a source
+   module, so it is kept out of the graph. *)
+let is_namespace_map_cmt path =
+  Sys.file_exists (Filename.remove_extension path ^ ".mlmap")
+
+(* A .cmt file that describes a source module *)
+let is_module_cmt path =
+  Filename.check_suffix path ".cmt" && not (is_namespace_map_cmt path)
+
 (* Recursively scan directories for .cmt files *)
 let rec scan_directory_recursive dir =
   try
@@ -215,7 +226,7 @@ let rec scan_directory_recursive dir =
               (* Recursively scan subdirectory *)
               cmt_files :=
                 List.append (scan_directory_recursive path) !cmt_files)
-          else if Filename.check_suffix file ".cmt" then
+          else if is_module_cmt path then
             (* Add cmt file *)
             cmt_files := path :: !cmt_files)
         files;
@@ -243,81 +254,50 @@ module DependencyExtractor = struct
         (* For path applications, we'll use the first path *)
         extract_module_from_path p1
 
-  (* Simplified AST file path resolution - just replace extension with .ast in the same directory *)
+  (* Resolve the .ast file written next to a .cmt file. Namespaced builds name
+     the CMT "app-MyNs.cmt" but keep the AST as "app.ast". *)
   let get_ast_path cmt_path =
-    let base_path = Filename.remove_extension cmt_path in
-    base_path ^ ".ast"
+    let base_name =
+      Filename.basename cmt_path |> Filename.remove_extension
+      |> strip_generated_namespace_suffix
+    in
+    Filename.concat (Filename.dirname cmt_path) (base_name ^ ".ast")
 
-  (* Function to read AST file contents efficiently *)
+  (* Read the module references recorded in the header of an AST file.
+     The compiler writes the byte length of the header as a binary int,
+     followed by "\nModuleA\nModuleB\n...", the source path and the
+     marshalled AST. Returns [None] when the header cannot be read. *)
   let read_ast_file ?(verbose = false) ?(skip_cache = false) ast_path =
     (* Check if AST data is already cached *)
     match Cache.get_ast_data ~verbose ast_path with
     | Some data when not skip_cache ->
         if verbose then Printf.printf "Using cached AST data for %s\n" ast_path;
-        data
+        Some data
     | _ -> (
         if verbose then Printf.printf "Reading AST file: %s\n" ast_path;
-        if not (Sys.file_exists ast_path) then
-          (* Return empty list if file doesn't exist *)
-          []
+        if not (Sys.file_exists ast_path) then None
         else
           try
             let ic = open_in_bin ast_path in
-
-            (* Efficiently read the entire header section of the AST file *)
-            let module_count = input_binary_int ic in
-
-            (* Skip the newline after the count *)
-            let _ = try input_char ic with _ -> '\000' in
-
-            (* Read all module references at once instead of line by line *)
-            let modules = ref [] in
-            let rec read_modules remaining max_iterations =
-              if remaining <= 0 || max_iterations <= 0 then !modules
-              else
-                try
-                  let buf = Buffer.create 128 in
-                  let rec read_line max_chars =
-                    if max_chars <= 0 then
-                      (* Line too long, skip the rest of this line *)
-                      try
-                        while input_char ic <> '\n' do
-                          ()
-                        done;
-                        read_modules (remaining - 1) (max_iterations - 1)
-                      with End_of_file -> !modules
-                    else
-                      let c = input_char ic in
-                      if c = '\n' then (
-                        let line = Buffer.contents buf in
-                        if
-                          String.length line > 0
-                          && line.[0] <> '/'
-                          && (String.length line <= 1
-                             || not (line.[0] = 'C' && line.[1] = ':'))
-                        then modules := line :: !modules;
-                        read_modules (remaining - 1) (max_iterations - 1))
-                      else (
-                        Buffer.add_char buf c;
-                        read_line (max_chars - 1))
+            Fun.protect
+              ~finally:(fun () -> close_in_noerr ic)
+              (fun () ->
+                let header_length = input_binary_int ic in
+                if header_length < 0 || header_length > in_channel_length ic
+                then None
+                else
+                  let modules =
+                    really_input_string ic header_length
+                    |> String.split_on_char '\n'
+                    |> List.filter (fun line -> line <> "")
                   in
-                  read_line 10000 (* Limit line length to 10,000 chars *)
-                with End_of_file -> !modules
-            in
-
-            let result = read_modules module_count 200000 in
-            (* Limit iterations to prevent infinite loops *)
-            close_in ic;
-
-            (* Cache the results *)
-            Cache.cache_ast_data ~verbose ~skip_cache ast_path result;
-
-            result
+                  Cache.cache_ast_data ~verbose ~skip_cache ast_path modules;
+                  Some modules)
           with e ->
             if verbose then
               Printf.printf "Error reading AST file %s: %s\n" ast_path
                 (Printexc.to_string e);
-            [])
+            None)
 
   (* Get the CMT file path for a source file based on cmt file patterns *)
   let get_cmt_path_for_source source_file =
@@ -396,17 +376,18 @@ module DependencyExtractor = struct
               module_name ast_path;
 
           (* Get the module list from the AST file *)
-          let modules = read_ast_file ~verbose ~skip_cache ast_path in
-
-          (* Convert to a set for O(1) lookup *)
-          let module StringSet = Set.Make (String) in
-          let modules_set = StringSet.of_list modules in
-
-          (* Efficient set membership check *)
-          let canonical_module_name = normalize_module_name module_name in
           let result =
-            StringSet.mem module_name modules_set
-            || StringSet.mem canonical_module_name modules_set
+            match read_ast_file ~verbose ~skip_cache ast_path with
+            | None -> true (* Unreadable header, conservatively keep it *)
+            | Some modules ->
+                (* Convert to a set for O(1) lookup *)
+                let module StringSet = Set.Make (String) in
+                let modules_set = StringSet.of_list modules in
+
+                (* Efficient set membership check *)
+                let canonical_module_name = normalize_module_name module_name in
+                StringSet.mem module_name modules_set
+                || StringSet.mem canonical_module_name modules_set
           in
 
           (* Cache the result *)
@@ -420,90 +401,95 @@ module DependencyExtractor = struct
 
           result)
 
-  (* Batch check for module usage to avoid repeated file operations *)
+  (* Batch check for module usage to avoid repeated file operations.
+     [ast_path] defaults to the AST file next to the CMT of [source_file]. *)
   let batch_check_modules_usage ?(verbose = false) ?(skip_cache = false)
-      source_file modules =
-    (* Get corresponding CMT file to find AST file in the same location *)
-    let cmt_path = get_cmt_path_for_source source_file in
-    let ast_path = get_ast_path cmt_path in
+      ?ast_path source_file modules =
+    let ast_path =
+      match ast_path with
+      | Some ast_path -> ast_path
+      | None -> get_ast_path (get_cmt_path_for_source source_file)
+    in
 
     if verbose then Printf.printf "Looking for AST file at: %s\n" ast_path;
 
-    if not (Sys.file_exists ast_path) then (
-      if verbose then
-        Printf.printf
-          "AST file not found at %s, conservatively returning all modules\n"
-          ast_path;
+    match read_ast_file ~verbose ~skip_cache ast_path with
+    | None ->
+        if verbose then
+          Printf.printf
+            "AST file not found or unreadable at %s, conservatively returning \
+             all modules\n"
+            ast_path;
 
-      (* Cache individual results *)
-      List.iter
-        (fun module_name ->
-          let cache_key = source_file ^ ":" ^ module_name in
-          Cache.cache_ast_dependency_result ~verbose ~skip_cache cache_key true)
-        modules;
-
-      modules (* Return all modules if AST file doesn't exist *))
-    else (
-      if verbose then
-        Printf.printf "Batch checking %d modules in AST file: %s\n"
-          (List.length modules) ast_path;
-
-      (* Get the module list from the AST file *)
-      let ast_modules = read_ast_file ~verbose ~skip_cache ast_path in
-
-      (* Convert ast_modules to a set for O(1) lookups instead of O(n) with List.mem *)
-      let module StringSet = Set.Make (String) in
-      let ast_modules_set = StringSet.of_list ast_modules in
-
-      (* Filter modules that are present in the AST file *)
-      let results =
-        (* Add a timeout mechanism *)
-        let start_time = Unix.gettimeofday () in
-        let timeout = 5.0 in
-        (* 5 second timeout - longer for full list processing *)
-        let filtered = ref [] in
-        let timed_out = ref false in
-
+        (* Cache individual results *)
         List.iter
           (fun module_name ->
-            (* Check if we've already timed out *)
-            if not !timed_out then (
-              if
-                (* Check if we've exceeded the timeout *)
-                Unix.gettimeofday () -. start_time > timeout
-              then (
-                Printf.eprintf
-                  "Warning: Timeout during batch module filtering\n";
-                timed_out := true)
-              else
-                (* O(1) lookup using set instead of O(n) with List.mem *)
-                let canonical_module_name = normalize_module_name module_name in
-                let is_used =
-                  StringSet.mem module_name ast_modules_set
-                  || StringSet.mem canonical_module_name ast_modules_set
-                in
-
-                (* Cache individual results *)
-                let cache_key = source_file ^ ":" ^ module_name in
-                Cache.cache_ast_dependency_result ~verbose ~skip_cache cache_key
-                  is_used;
-
-                (* Add to filtered results if used *)
-                if is_used then filtered := module_name :: !filtered))
+            let cache_key = source_file ^ ":" ^ module_name in
+            Cache.cache_ast_dependency_result ~verbose ~skip_cache cache_key
+              true)
           modules;
 
-        (* If we timed out, conservatively return all modules *)
-        if !timed_out then (
-          if verbose then Printf.printf "Timed out, returning all modules\n";
-          modules)
-        else List.rev !filtered
-      in
+        modules (* Return all modules if the AST header is unavailable *)
+    | Some ast_modules ->
+        if verbose then
+          Printf.printf "Batch checking %d modules in AST file: %s\n"
+            (List.length modules) ast_path;
 
-      if verbose then
-        Printf.printf "Filtered %d out of %d modules in AST file\n"
-          (List.length results) (List.length modules);
+        (* Convert ast_modules to a set for O(1) lookups instead of O(n) with List.mem *)
+        let module StringSet = Set.Make (String) in
+        let ast_modules_set = StringSet.of_list ast_modules in
 
-      results)
+        (* Filter modules that are present in the AST file *)
+        let results =
+          (* Add a timeout mechanism *)
+          let start_time = Unix.gettimeofday () in
+          let timeout = 5.0 in
+          (* 5 second timeout - longer for full list processing *)
+          let filtered = ref [] in
+          let timed_out = ref false in
+
+          List.iter
+            (fun module_name ->
+              (* Check if we've already timed out *)
+              if not !timed_out then (
+                if
+                  (* Check if we've exceeded the timeout *)
+                  Unix.gettimeofday () -. start_time > timeout
+                then (
+                  Printf.eprintf
+                    "Warning: Timeout during batch module filtering\n";
+                  timed_out := true)
+                else
+                  (* O(1) lookup using set instead of O(n) with List.mem *)
+                  let canonical_module_name =
+                    normalize_module_name module_name
+                  in
+                  let is_used =
+                    StringSet.mem module_name ast_modules_set
+                    || StringSet.mem canonical_module_name ast_modules_set
+                  in
+
+                  (* Cache individual results *)
+                  let cache_key = source_file ^ ":" ^ module_name in
+                  Cache.cache_ast_dependency_result ~verbose ~skip_cache
+                    cache_key is_used;
+
+                  (* Add to filtered results if used *)
+                  if is_used then filtered := module_name :: !filtered))
+            modules;
+
+          (* If we timed out, conservatively return all modules *)
+          if !timed_out then (
+            if verbose then Printf.printf "Timed out, returning all modules\n";
+            modules)
+          else List.rev !filtered
+        in
+
+        if verbose then
+          Printf.printf "Filtered %d out of %d modules in AST file\n"
+            (List.length results) (List.length modules);
+
+        results
 
   (* Legacy source file checking function - kept for backward compatibility *)
   let is_module_used_in_source ?(verbose = false) source_file module_name =
@@ -563,9 +549,10 @@ module DependencyExtractor = struct
           Printf.printf "Error reading source file %s\n" source_file;
         true (* In case of file reading failure, conservatively return true *)
 
-  (* Extract dependencies from cmt_info structure *)
+  (* Extract dependencies from cmt_info structure. [cmt_path] is the file the
+     info was read from; the AST file next to it filters the imports. *)
   let extract_dependencies_from_cmt_info ?(verbose = false)
-      ?(skip_cache = false) cmt_info =
+      ?(skip_cache = false) ?cmt_path cmt_info =
     let deps = ref [] in
 
     (* Check source file path - directly use cmt_sourcefile *)
@@ -598,16 +585,19 @@ module DependencyExtractor = struct
          cmt_info.Cmt_format.cmt_imports
      with _ -> ());
 
-    (* If we have a valid source file, do batch filtering *)
-    if source_file <> "" then
-      let filtered_deps =
-        batch_check_modules_usage ~verbose ~skip_cache source_file
-          !potential_deps
-      in
-      deps := filtered_deps
-    else
-      (* If no source file, include all potential dependencies *)
-      deps := !potential_deps;
+    (* Filter the imports by the module references in the AST file *)
+    (match cmt_path with
+    | Some cmt_path ->
+        deps :=
+          batch_check_modules_usage ~verbose ~skip_cache
+            ~ast_path:(get_ast_path cmt_path) cmt_path !potential_deps
+    | None when source_file <> "" ->
+        deps :=
+          batch_check_modules_usage ~verbose ~skip_cache source_file
+            !potential_deps
+    | None ->
+        (* If no source file, include all potential dependencies *)
+        deps := !potential_deps);
 
     (* Return unique dependencies *)
     List.sort_uniq String.compare !deps
@@ -772,7 +762,7 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
   try
     (* Check if file has a cached version with matching digests *)
     let cmt_info =
-      try Cmt_format.read_cmt path
+      try snd (Compilers.read_cmt path)
       with Cmt_format.Error msg ->
         (* Provide more detailed error information *)
         if verbose then
@@ -814,7 +804,7 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
         (* Extract dependencies from cmt_info *)
         let dependencies =
           DependencyExtractor.extract_dependencies_from_cmt_info ~verbose
-            ~skip_cache cmt_info
+            ~skip_cache ~cmt_path:path cmt_info
         in
 
         (* Filter out self-references and normalize *)
@@ -848,6 +838,7 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
             interface_digest = cmt_info.cmt_interface_digest;
             implementation_digest = cmt_info.cmt_source_digest;
             file_path;
+            cmt_path = Some path;
           }
         in
 
@@ -856,7 +847,7 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
 
         module_info
   with
-  | Invalid_cmt_file _ as e -> raise e
+  | (Invalid_cmt_file _ | Compilers.Unsupported _) as e -> raise e
   | Sys_error msg ->
       raise
         (Invalid_cmt_file (Printf.sprintf "System error with %s: %s" path msg))
@@ -880,7 +871,7 @@ let get_project_modules paths =
           (fun file ->
             let path = Filename.concat dir file in
             if Sys.is_directory path then scan_dir_for_modules path
-            else if Filename.check_suffix file ".cmt" then
+            else if is_module_cmt path then
               let name =
                 Filename.basename file |> Filename.remove_extension
                 |> normalize_module_name
@@ -895,7 +886,7 @@ let get_project_modules paths =
   List.iter
     (fun path ->
       if Sys.is_directory path then scan_dir_for_modules path
-      else if Filename.check_suffix path ".cmt" then
+      else if is_module_cmt path then
         let name =
           Filename.basename path |> Filename.remove_extension
           |> normalize_module_name
@@ -954,7 +945,7 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
             let dir_cmt_files = scan_directory path in
             cmt_files := dir_cmt_files @ !cmt_files;
             collect rest)
-          else if Filename.check_suffix path ".cmt" then (
+          else if is_module_cmt path then (
             cmt_files := path :: !cmt_files;
             collect rest)
           else collect rest

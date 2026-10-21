@@ -1,5 +1,14 @@
 (library
  (name rescriptdep)
  (public_name rescriptdep)
- (modules parse_utils parser formatter dependency_graph)
+ (modules
+  parse_utils
+  parser
+  typed_ast
+  compiler_v11
+  compiler_v12
+  compiler_v13
+  compilers
+  formatter
+  dependency_graph)
  (libraries str unix vendor eio eio_main yojson))

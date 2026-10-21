@@ -1,0 +1,142 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+
+  basic:
+    dependencies:
+      '@rescript/react':
+        specifier: 0.15.0
+        version: 0.15.0(@rescript/runtime@12.3.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      react:
+        specifier: ^19.1.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.3.1(react@19.3.1)
+      rescript:
+        specifier: 12.3.1
+        version: 12.3.1
+
+  namespaced:
+    dependencies:
+      '@rescript/react':
+        specifier: 0.15.0
+        version: 0.15.0(@rescript/runtime@12.3.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      react:
+        specifier: ^19.1.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.3.1(react@19.3.1)
+      rescript:
+        specifier: 12.3.1
+        version: 12.3.1
+
+packages:
+
+  '@rescript/darwin-arm64@12.3.1':
+    resolution: {integrity: sha512-pwdnHhuIMH4Y5nuEwBLAMOYvGIcAVgnSZq/DWUNZJWoUr7YZpNkABJp0TFGiyYePT5ld+nvjQ40oI0rKjEWK8w==}
+    engines: {node: '>=20.11.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@rescript/darwin-x64@12.3.1':
+    resolution: {integrity: sha512-Eu39cHkzoHyC18BCRqnmZnLgP42c7JhR74UBl6XhaFOzuf63tddOssgTyX9mEihzok2xFBGLpETrCvZN8Qqtkg==}
+    engines: {node: '>=20.11.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@rescript/linux-arm64@12.3.1':
+    resolution: {integrity: sha512-Nsk3qfDRrp9b6RI85t0xzrr8LoxwXAI678V7zpQMaRfhltYl+N5fsK66MWx9rSrv6SIWPVSyU8FrJG0MskONwQ==}
+    engines: {node: '>=20.11.0'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rescript/linux-x64@12.3.1':
+    resolution: {integrity: sha512-CfAJ3q/y/GSwrSJCLdCdyLWWdb7kTZkl2vjC+mSAw3pMqknEyCbt4ukS64Xn8PrqxVGHIs+kdefEphU7dt77xA==}
+    engines: {node: '>=20.11.0'}
+    cpu: [x64]
+    os: [linux]
+
+  '@rescript/react@0.15.0':
+    resolution: {integrity: sha512-qDrrgxYzxRL/pjug617u5Q4+aqEfV5g+GQnd+eCWb0XqPrKucaDzN5rirDUZPg8UrqU/AvCP8Ev5cFd+MJx88A==}
+    peerDependencies:
+      '@rescript/runtime': '>=12.0.0'
+      react: '>=19.2.0'
+      react-dom: '>=19.2.0'
+
+  '@rescript/runtime@12.3.1':
+    resolution: {integrity: sha512-yTM0iTl6owyA37UEtPAZR0A3G1kFffJWb+UE6+rcG/N2kxYQnuSlNDfVvsry7l8O+o/ME6QE7Zt7efjCDGM3xg==}
+
+  '@rescript/win32-x64@12.3.1':
+    resolution: {integrity: sha512-1ffFbw9IJnJmGTNshWzRcG6wQ7GkzOeWxLLrarvxI38p2aYPQKTbVovUraXpw1Jfg2bbWkm8hPMMrFIezI/pkA==}
+    engines: {node: '>=20.11.0'}
+    cpu: [x64]
+    os: [win32]
+
+  react-dom@19.3.1:
+    resolution: {integrity: sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ==}
+    peerDependencies:
+      react: ^19.3.1
+
+  react@19.3.1:
+    resolution: {integrity: sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw==}
+    engines: {node: '>=0.10.0'}
+
+  rescript@12.3.1:
+    resolution: {integrity: sha512-Q4y0SQ7EUShiX1ymEG5iOCGzbVSOh7CCLEnQUkq19FX2i64eQ2uEGeMCKFl0AsL7TcK5pS+66QTSP6jf6LSgaA==}
+    engines: {node: '>=20.11.0'}
+    hasBin: true
+
+  scheduler@0.28.0:
+    resolution: {integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==}
+
+snapshots:
+
+  '@rescript/darwin-arm64@12.3.1':
+    optional: true
+
+  '@rescript/darwin-x64@12.3.1':
+    optional: true
+
+  '@rescript/linux-arm64@12.3.1':
+    optional: true
+
+  '@rescript/linux-x64@12.3.1':
+    optional: true
+
+  '@rescript/react@0.15.0(@rescript/runtime@12.3.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      '@rescript/runtime': 12.3.1
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
+
+  '@rescript/runtime@12.3.1': {}
+
+  '@rescript/win32-x64@12.3.1':
+    optional: true
+
+  react-dom@19.3.1(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+      scheduler: 0.28.0
+
+  react@19.3.1: {}
+
+  rescript@12.3.1:
+    dependencies:
+      '@rescript/runtime': 12.3.1
+    optionalDependencies:
+      '@rescript/darwin-arm64': 12.3.1
+      '@rescript/darwin-x64': 12.3.1
+      '@rescript/linux-arm64': 12.3.1
+      '@rescript/linux-x64': 12.3.1
+      '@rescript/win32-x64': 12.3.1
+
+  scheduler@0.28.0: {}

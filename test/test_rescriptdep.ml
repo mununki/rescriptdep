@@ -43,8 +43,10 @@ let compare_files file1 file2 =
   let cmd = Printf.sprintf "diff -q %s %s >/dev/null" file1 file2 in
   Sys.command cmd = 0
 
-(* Test rescriptdep on a specific project *)
-let test_project_fixtures project_name =
+(* Test rescriptdep on a specific project. [fixture_name] defaults to the
+   project name and names the reference JSON in test/fixtures. *)
+let test_project_fixtures ?fixture_name project_name =
+  let fixture_name = Option.value fixture_name ~default:project_name in
   printf "Testing rescriptdep on %s project...\n" project_name;
 
   (* Create paths *)
@@ -59,9 +61,12 @@ let test_project_fixtures project_name =
       ]
   in
   let reference_output =
-    Test_support.require_existing_path
-      ~hint:"Reference JSON fixture directory not found."
-      [ Printf.sprintf "fixtures/%s.json" project_name; Printf.sprintf "test/fixtures/%s.json" project_name ]
+    let fixtures_dir =
+      Test_support.require_existing_path
+        ~hint:"Reference JSON fixture directory not found."
+        [ "fixtures"; "test/fixtures" ]
+    in
+    Filename.concat fixtures_dir (fixture_name ^ ".json")
   in
 
   (* Ensure fixtures directory exists *)
@@ -117,7 +122,19 @@ let test_project_fixtures project_name =
 let test_rescriptdep () =
   printf "=== Running rescriptdep dependency tests ===\n";
 
-  test_project_fixtures "rescript"
+  (* Run every project even when an earlier one fails *)
+  let results =
+    [
+      ("rescript", "rescript");
+      ("rescript12/basic", "rescript12_basic");
+      ("rescript12/namespaced", "rescript12_namespaced");
+      ("rescript13/basic", "rescript13_basic");
+      ("rescript13/namespaced", "rescript13_namespaced");
+    ]
+    |> List.map (fun (project_name, fixture_name) ->
+           test_project_fixtures ~fixture_name project_name)
+  in
+  List.for_all Fun.id results
 
 (* Main execution code *)
 let () =

@@ -1,0 +1,142 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+
+  basic:
+    dependencies:
+      '@rescript/react':
+        specifier: 0.15.0
+        version: 0.15.0(@rescript/runtime@13.0.0-alpha.6)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      react:
+        specifier: ^19.1.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.3.1(react@19.3.1)
+      rescript:
+        specifier: 13.0.0-alpha.6
+        version: 13.0.0-alpha.6
+
+  namespaced:
+    dependencies:
+      '@rescript/react':
+        specifier: 0.15.0
+        version: 0.15.0(@rescript/runtime@13.0.0-alpha.6)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      react:
+        specifier: ^19.1.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.3.1(react@19.3.1)
+      rescript:
+        specifier: 13.0.0-alpha.6
+        version: 13.0.0-alpha.6
+
+packages:
+
+  '@rescript/darwin-arm64@13.0.0-alpha.6':
+    resolution: {integrity: sha512-wb08dh/miY3OGUTCJL/0m8Q9xgDkd5Klh+vi7dAVl1y94g/JgVzxsU6ElB6Bb3baQeXcZW5A8tu5QnAZwwdxdw==}
+    engines: {node: '>=20.11.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@rescript/darwin-x64@13.0.0-alpha.6':
+    resolution: {integrity: sha512-N0QJzzhvBC25zt8FVSRQYSVsM6Pv8OATVANbSZUZBX/wv5HCISgUWTaZ1q0RLHpEvRymalT+kXEZGG6fUvcDCg==}
+    engines: {node: '>=20.11.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@rescript/linux-arm64@13.0.0-alpha.6':
+    resolution: {integrity: sha512-/HEgh1Ocsyy//VsQ3e+f0qNIi/9JGqcFCM95bh/Ee0m/8RbswmUtfFjvcs/WLrhSPW9BndkLWBGMRwIYpBkRgQ==}
+    engines: {node: '>=20.11.0'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rescript/linux-x64@13.0.0-alpha.6':
+    resolution: {integrity: sha512-kQlCnbUPwyxrC3KGLIR7ASdDKVkDd4hNBD+eD3t/yIIfR6lCs00EeVWbbfHMbs/Rg7TmQvGKkZTgAEQ6IoIhoQ==}
+    engines: {node: '>=20.11.0'}
+    cpu: [x64]
+    os: [linux]
+
+  '@rescript/react@0.15.0':
+    resolution: {integrity: sha512-qDrrgxYzxRL/pjug617u5Q4+aqEfV5g+GQnd+eCWb0XqPrKucaDzN5rirDUZPg8UrqU/AvCP8Ev5cFd+MJx88A==}
+    peerDependencies:
+      '@rescript/runtime': '>=12.0.0'
+      react: '>=19.2.0'
+      react-dom: '>=19.2.0'
+
+  '@rescript/runtime@13.0.0-alpha.6':
+    resolution: {integrity: sha512-PtIAApHWITR8nX//wh7eMQIdQbyl/Ynhr+oMcyUtQN98mXnU/F5UpGDGAK6QXanDpdVSW6korsqHyDcMtIscEg==}
+
+  '@rescript/win32-x64@13.0.0-alpha.6':
+    resolution: {integrity: sha512-JGHbh8xuRtOPJeE86vzDLqSnL471CeAV3uWacEBCi6K7ZNHZlihCQhEUqWf7ir9gf46xcpnS//8A5L1Baa6Q3w==}
+    engines: {node: '>=20.11.0'}
+    cpu: [x64]
+    os: [win32]
+
+  react-dom@19.3.1:
+    resolution: {integrity: sha512-Y0bARz53lhEC1NMCASs0/j+faB/zqt3R8hpvg1e8+61ZVJ4UL0UdC4cBbXfZMcIuhrfgeILTLe+ZeBCavQPtKQ==}
+    peerDependencies:
+      react: ^19.3.1
+
+  react@19.3.1:
+    resolution: {integrity: sha512-QNhWdt7nrgVWWQG58QuGsAR3jv3Hbe4mb4vz7w2csnHavciZJgda1CPNaldF6eVxv90ud3jUXpKlHL69gO38yw==}
+    engines: {node: '>=0.10.0'}
+
+  rescript@13.0.0-alpha.6:
+    resolution: {integrity: sha512-8bnerL6UZ11xrbt8VSa2FuFYOW1pyEIx3CGYgVz2tXsG+cVlMPjHaalquLJdZCTdz7ypJJclxAFFuGfH7B+nKg==}
+    engines: {node: '>=22'}
+    hasBin: true
+
+  scheduler@0.28.0:
+    resolution: {integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==}
+
+snapshots:
+
+  '@rescript/darwin-arm64@13.0.0-alpha.6':
+    optional: true
+
+  '@rescript/darwin-x64@13.0.0-alpha.6':
+    optional: true
+
+  '@rescript/linux-arm64@13.0.0-alpha.6':
+    optional: true
+
+  '@rescript/linux-x64@13.0.0-alpha.6':
+    optional: true
+
+  '@rescript/react@0.15.0(@rescript/runtime@13.0.0-alpha.6)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+    dependencies:
+      '@rescript/runtime': 13.0.0-alpha.6
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
+
+  '@rescript/runtime@13.0.0-alpha.6': {}
+
+  '@rescript/win32-x64@13.0.0-alpha.6':
+    optional: true
+
+  react-dom@19.3.1(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+      scheduler: 0.28.0
+
+  react@19.3.1: {}
+
+  rescript@13.0.0-alpha.6:
+    dependencies:
+      '@rescript/runtime': 13.0.0-alpha.6
+    optionalDependencies:
+      '@rescript/darwin-arm64': 13.0.0-alpha.6
+      '@rescript/darwin-x64': 13.0.0-alpha.6
+      '@rescript/linux-arm64': 13.0.0-alpha.6
+      '@rescript/linux-x64': 13.0.0-alpha.6
+      '@rescript/win32-x64': 13.0.0-alpha.6
+
+  scheduler@0.28.0: {}

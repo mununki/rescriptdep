@@ -3,8 +3,8 @@
  (modules test_support))
 
 (tests
- (names test_namespace)
- (modules test_namespace)
+ (names test_namespace test_compilers)
+ (modules test_namespace test_compilers)
  (libraries rescriptdep))
 
 (executables
@@ -12,12 +12,14 @@
   test_rescriptdep
   test_cmt_imports
   test_cmt_values
-  test_ast)
+  test_ast
+  test_value_usage)
  (modules
   test_rescriptdep
   test_cmt_imports
   test_cmt_values
-  test_ast)
+  test_ast
+  test_value_usage)
  (libraries rescriptdep str test_support))
 
 (executable

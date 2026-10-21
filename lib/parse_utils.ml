@@ -197,6 +197,9 @@ let is_stdlib_or_internal_module name =
   || String.starts_with ~prefix:"Js_" name
   || String.starts_with ~prefix:"Belt_" name
   || String.starts_with ~prefix:"Jsx" name
+  (* ReScript 12 runtime modules *)
+  || String.starts_with ~prefix:"Stdlib_" name
+  || String.starts_with ~prefix:"Primitive_" name
 
 (* Check if a string is a valid module name *)
 let is_valid_module_name str =
@@ -249,13 +252,23 @@ let find_external_module_path ?(verbose = false) module_name project_root =
           with _ -> []
         in
 
-        (* Extract dependencies from different fields *)
-        let bs_deps = get_string_array json "bs-dependencies" in
-        let bs_dev_deps = get_string_array json "bs-dev-dependencies" in
-        let pinned_deps = get_string_array json "pinned-dependencies" in
-
-        (* Combine all dependencies *)
-        let all_deps = List.concat [ bs_deps; bs_dev_deps; pinned_deps ] in
+        (* Extract dependencies from different fields. ReScript 12 renamed
+           "bs-dependencies" and "bs-dev-dependencies" to "dependencies" and
+           "dev-dependencies". *)
+        let all_deps =
+          [
+            "dependencies";
+            "dev-dependencies";
+            "bs-dependencies";
+            "bs-dev-dependencies";
+            "pinned-dependencies";
+          ]
+          |> List.concat_map (get_string_array json)
+          |> List.fold_left
+               (fun acc dep -> if List.mem dep acc then acc else dep :: acc)
+               []
+          |> List.rev
+        in
 
         if verbose then
           Printf.printf "Found dependencies: %s\n" (String.concat ", " all_deps);

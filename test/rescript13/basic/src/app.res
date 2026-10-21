@@ -1,0 +1,11 @@
+module M = {
+  @react.component
+  let make = (~p as _) => <Comp0 />
+}
+
+let run = () => {
+  let result = MathUtil.square(5)
+  Logger.log(`Result: ${result->Int.toString}`)
+
+  <M p=10 />
+}
