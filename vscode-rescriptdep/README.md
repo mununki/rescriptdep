@@ -47,6 +47,7 @@ This extension provides several commands in the Command Palette (`Ctrl+Shift+P` 
 ## Requirements
 
 - A ReScript project (with either `bsconfig.json` or `rescript.json` configuration file)
+- ReScript 11, 12 or 13 (see [Supported ReScript Versions](https://github.com/mununki/rescriptdep#supported-rescript-versions))
 - Compiled output in the `lib/bs` directory
 - **Platform**: macOS or Linux (Windows is not supported in the current version)
 
@@ -71,6 +72,13 @@ This extension doesn't require any specific settings.
 - Please report any issues on the GitHub repository
 
 ## Release Notes
+
+### 0.9.0
+
+- Added support for ReScript 12 and the ReScript 13.0 alphas; inline value usage counts are not available for 13.0.0-alpha.4
+- Fixed inline value usage counts showing an error in ReScript 12 projects
+- Fixed dependency graphs of projects using `"namespace": true`, which showed unused imports, ReScript runtime modules and the generated namespace module; inline value usage counts now work in these projects too
+- Resolved file paths of modules from packages listed in the ReScript 12 `dependencies` field of `rescript.json`
 
 ### 0.8.4
 
