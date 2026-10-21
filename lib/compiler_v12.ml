@@ -1,11 +1,12 @@
-(* compiler_v12.ml - Typed tree decoder for ReScript 12 *)
+(* compiler_v12.ml - Typed tree decoder for ReScript 12 and the
+   ReScript 13.0 alphas that keep its layout (see Typedtree_v12) *)
 
 open Stdlib
 open Typed_ast
 open Typedtree_v12
 
 (* Constructor counts (constant, non-constant) of the decoded variants *)
-let expression_desc_constructors = (0, 24)
+let expression_desc_constructors = (2, 26)
 let module_expr_desc_constructors = (0, 6)
 let structure_item_desc_constructors = (0, 12)
 
@@ -43,10 +44,14 @@ let rec expr e =
     | Texp_ifthenelse (e1, e2, eo) ->
         Node (expr e1 :: expr e2 :: option_to_list expr eo)
     | Texp_for (_, _, e1, e2, _, e3) -> Node [ expr e1; expr e2; expr e3 ]
+    | Texp_for_of (_, _, e1, e2) | Texp_for_await_of (_, _, e1, e2) ->
+        Node [ expr e1; expr e2 ]
     | Texp_send (e, _, eo) -> Node (expr e :: option_to_list expr eo)
     | Texp_letmodule (_, _, m, body) -> Node [ module_expr m; expr body ]
     | Texp_pack m -> module_expr m
-    | Texp_constant _ | Texp_extension_constructor _ -> Node []
+    | Texp_constant _ | Texp_break | Texp_continue
+    | Texp_extension_constructor _ ->
+        Node []
 
 and case c = option_to_list expr c.c_guard @ [ expr c.c_rhs ]
 

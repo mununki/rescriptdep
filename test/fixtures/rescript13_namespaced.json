@@ -64,6 +64,15 @@
       "in_cycle": false
     },
     {
+      "name": "Loops",
+      "path": "test/rescript13/namespaced/src/loops.res",
+      "dependencies": [],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
       "name": "MathUtil",
       "path": "test/rescript13/namespaced/src/mathUtil.res",
       "dependencies": [
@@ -99,9 +108,9 @@
   ],
   "cycles": [],
   "metrics": {
-    "total_modules": 5,
-    "average_fan_in": 0.8,
-    "average_fan_out": 1.4,
+    "total_modules": 6,
+    "average_fan_in": 0.666666666667,
+    "average_fan_out": 1.16666666667,
     "most_depended_upon": {"module": "Comp0", "count": 1},
     "most_dependencies": {"module": "App", "count": 4},
     "cycles_count": 0

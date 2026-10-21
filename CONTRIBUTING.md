@@ -69,7 +69,8 @@ The test directory contains sample ReScript projects used for testing the depend
   `basic/` (standard setup) and `namespaced/` (`"namespace": true`). `math.res` is
   named `mathUtil.res` there because ReScript 12 resolves `Math` to `Stdlib.Math`.
 - `test/rescript13/`: The same workspace for ReScript 13, with `Belt` calls replaced by
-  `Stdlib` ones since ReScript 13 no longer ships `Belt`.
+  `Stdlib` ones since ReScript 13 no longer ships `Belt`, plus `loops.res`, which uses syntax
+  only ReScript 13 has (`for...of`, `continue`, template literals, object literals).
 
 The packages of a workspace share their compiled dependencies, so `res:build` builds them
 one at a time (`--workspace-concurrency=1`); parallel builds corrupt the shared `.cmi` files.
@@ -98,17 +99,24 @@ type definitions whose constructor order and arity match the compiler exactly. O
 tree used by value usage analysis (`-vb`) differs between the supported releases; the fields of
 `cmt_infos` used by the dependency graph and the `.ast` header format are shared.
 
+`lib/compilers.ml` picks the decoder from the CMT magic number (in `compiler/ext/config.ml` of
+the ReScript repository), the number of fields of the `cmt_infos` record and, where several
+releases write the same CMT format, the version in `lib/bs/compiler-info.json`. For example,
+ReScript 12 and 13.0.0-alpha.1 to alpha.5 all write `Caml1999T022` with 14 fields, but alpha.4
+changed the typed tree in place.
+
 To add a release:
 
-1. Add an entry to `all` in `lib/compilers.ml` with the release's CMT magic number (in
-   `compiler/ext/config.ml` of the ReScript repository) and the number of fields of its
-   `cmt_infos` record. This is enough for the dependency graph.
-2. For value usage analysis, vendor the parts of its `compiler/ml/typedtree.mli` that are
-   decoded as `vendor/typedtree_vNN.ml`, keeping every constructor in order, and add a
-   `lib/compiler_vNN.ml` decoder with its constructor counts. `test/test_compilers.ml` checks
-   that the counts match the vendored definitions.
-3. Add a fixture workspace (`test/rescriptNN/`), its reference JSON fixtures, and the project
-   to `test/test_rescriptdep.ml`, `test/test_value_usage.ml` and the `Makefile`.
+1. Diff its `compiler/ml/typedtree.mli` against the release a decoder already reads. If only
+   constructors were appended, or constant constructors added, extend that decoder's vendored
+   typedtree and list the version in its entry in `lib/compilers.ml`.
+2. Otherwise vendor the parts of its typedtree that are decoded as `vendor/typedtree_vNN.ml`,
+   keeping every constructor in order, add a `lib/compiler_vNN.ml` decoder with its constructor
+   counts, and add an entry to `all` in `lib/compilers.ml`. `test/test_compilers.ml` checks that
+   the counts match the vendored definitions.
+3. Add a fixture workspace (`test/rescriptNN/`) or update the existing one, its reference JSON
+   fixtures, and the project to `test/test_rescriptdep.ml`, `test/test_value_usage.ml` and the
+   `Makefile`.
 
 ### Running the Benchmark
 

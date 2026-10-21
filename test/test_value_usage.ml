@@ -3,8 +3,7 @@ open Printf
 
 (* Value usage counts (-vb) for the same sources compiled by ReScript 11, 12
    and 13. Reading a CMT file with the wrong typedtree layout used to crash
-   the process, so every supported project must give the same counts, and
-   projects built by an unsupported compiler must report it without crashing. *)
+   the process, so every project must give the same counts. *)
 
 let count_usage bs_dir ~module_name ~value_name ~value_line =
   Rescriptdep.Parser.clear_cache ();
@@ -34,8 +33,9 @@ let format_counts counts =
   |> String.concat ", "
 
 (* [math_module] is the module defined by math.res (v11) / mathUtil.res (v12):
-   ReScript 12 resolves "Math" to Stdlib.Math. *)
-let test_project project ~math_module =
+   ReScript 12 resolves "Math" to Stdlib.Math. [extra_cases] cover syntax that
+   only some releases have. *)
+let test_project ?(extra_cases = []) project ~math_module =
   let bs_dir = find_bs_dir project in
   printf "=== Value usage in %s ===\n" project;
   let cases =
@@ -51,6 +51,7 @@ let test_project project ~math_module =
       ("Utils", "divider", 12, [ (math_module, 0); ("Utils", 1) ]);
       ("Utils", "whitelist", 16, [ (math_module, 1); ("Utils", 1) ]);
     ]
+    @ extra_cases
   in
   List.for_all
     (fun (module_name, value_name, value_line, expected) ->
@@ -69,29 +70,20 @@ let test_project project ~math_module =
         false))
     cases
 
-(* Value usage analysis does not decode ReScript 13 typed trees yet; every
-   module must report -6 (unsupported compiler) instead of a count *)
-let test_unsupported_project project =
-  printf "=== Value usage in %s (unsupported) ===\n" project;
-  let counts =
-    count_usage (find_bs_dir project) ~module_name:"Utils"
-      ~value_name:"multiply" ~value_line:2
-  in
-  printf "  Utils.multiply@2: %s\n" (format_counts counts);
-  counts <> [] && List.for_all (fun (_, count) -> count = -6) counts
+(* loops.res uses step inside for...of, an optional parameter default, a
+   template literal, an object literal and an object field access *)
+let rescript13_cases = [ ("Loops", "step", 1, [ ("Loops", 5) ]) ]
 
 let () =
-  let supported =
+  let results =
     [
-      ("rescript", "Math");
-      ("rescript12/basic", "MathUtil");
-      ("rescript12/namespaced", "MathUtil");
+      ("rescript", "Math", []);
+      ("rescript12/basic", "MathUtil", []);
+      ("rescript12/namespaced", "MathUtil", []);
+      ("rescript13/basic", "MathUtil", rescript13_cases);
+      ("rescript13/namespaced", "MathUtil", rescript13_cases);
     ]
-    |> List.map (fun (project, math_module) ->
-        test_project project ~math_module)
+    |> List.map (fun (project, math_module, extra_cases) ->
+        test_project ~extra_cases project ~math_module)
   in
-  let unsupported =
-    [ "rescript13/basic"; "rescript13/namespaced" ]
-    |> List.map test_unsupported_project
-  in
-  exit (if List.for_all Fun.id (supported @ unsupported) then 0 else 1)
+  exit (if List.for_all Fun.id results then 0 else 1)

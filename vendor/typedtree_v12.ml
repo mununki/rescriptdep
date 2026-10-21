@@ -1,4 +1,8 @@
-(* Typedtree layout written by ReScript 12 (compiler/ml/typedtree.mli).
+(* Typedtree layout written by ReScript 12 (compiler/ml/typedtree.mli), which
+   ReScript 13.0.0-alpha.1 to alpha.3 keep unchanged. 13.0.0-alpha.5 adds the
+   [Texp_break] and [Texp_continue] constants and appends [Texp_for_of] and
+   [Texp_for_await_of]; ReScript 12 never writes them, so they are declared
+   here too and one definition reads all of these releases.
 
    CMT files are read with [input_value], so constructor order and arity must
    match the compiler exactly. Only the nodes that value usage analysis walks
@@ -69,6 +73,8 @@ and expression_desc =
   | Texp_array of expression list
   | Texp_ifthenelse of expression * expression * expression option
   | Texp_sequence of expression * expression
+  | Texp_break
+  | Texp_continue
   | Texp_while of expression * expression
   | Texp_for of opaque * opaque * expression * expression * opaque * expression
   | Texp_send of expression * opaque * expression option
@@ -77,6 +83,8 @@ and expression_desc =
   | Texp_assert of expression
   | Texp_pack of module_expr
   | Texp_extension_constructor of opaque * Path.t
+  | Texp_for_of of Ident.t * opaque * expression * expression
+  | Texp_for_await_of of Ident.t * opaque * expression * expression
 
 and case = { c_lhs : pattern; c_guard : expression option; c_rhs : expression }
 

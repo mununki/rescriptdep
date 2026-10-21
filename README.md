@@ -55,10 +55,14 @@ With `-vb`, each module reports its usage count, or a negative code when it coul
 |---|---|---|
 | 11.0.0 - 11.1.4 | Yes | Yes |
 | 12.0.0 - 12.3.1 | Yes | Yes |
-| 13.0.0-alpha.6 | Yes | Not yet (`-6`) |
+| 13.0.0-alpha.1 - alpha.3, alpha.5, alpha.6 | Yes | Yes |
+| 13.0.0-alpha.4 | Yes | No (`-6`) |
 
-rescriptdep identifies the compiler from each `.cmt` file. Files written by other compilers are
-rejected with an error instead of being misread.
+rescriptdep identifies the compiler from each `.cmt` file and, for ReScript 12 and later, from the
+version rewatch records in `lib/bs/compiler-info.json`. Files in formats no supported compiler
+writes are rejected with an error instead of being misread. Other versions of a supported format
+(for example a later 13.0 prerelease) get the dependency graph, and `-6` from `-vb` until their
+typed tree has been checked.
 
 ## Development
 

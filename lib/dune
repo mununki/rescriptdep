@@ -7,6 +7,7 @@
   typed_ast
   compiler_v11
   compiler_v12
+  compiler_v13
   compilers
   formatter
   dependency_graph)
