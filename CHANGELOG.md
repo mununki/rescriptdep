@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Added regression coverage for dependency graph dependent-index updates
+- Added ReScript 12 support for value usage analysis (`-vb`) by decoding typed trees with the layout of the compiler that wrote each `.cmt` file
+- Added ReScript 12 fixture projects (standard and namespaced) with dependency graph and value usage regression tests
 
 ### Changed
 - Improved dependency graph performance by maintaining a reverse dependent index instead of scanning the full graph for each dependent lookup
@@ -16,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Prevented stale VS Code inline value usage decorations from appearing after source edits or outdated CLI responses
 - Improved inline value usage cache invalidation when ReScript build artifacts change
+- Fixed a segmentation fault when counting value usage (`-vb`) in projects built with ReScript 12
+- Fixed namespaced projects so imports are filtered by each module's `.ast` file again; ReScript 12 runtime modules (`Stdlib_*`, `Primitive_*`) and unused imports no longer appear as dependencies, and the generated namespace module is no longer shown as a node
+- Fixed value usage analysis (`-vb`) in namespaced projects
+- Read the ReScript 12 `dependencies` and `dev-dependencies` fields of `rescript.json` when resolving external module paths
+- Read `.ast` headers by their byte length so data from the binary AST is never taken as module references
+- Aligned the vendored ReScript 11 typedtree with the compiler's constructor layout
 
 ## [0.1.2] - 2026-04-22
 ### Fixed

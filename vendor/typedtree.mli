@@ -18,6 +18,10 @@
 (** By comparison with {!Parsetree}:
     - Every {!Longindent.t} is accompanied by a resolved {!Path.t}. *)
 
+(* This mirrors the typedtree layout written by ReScript 11 and earlier. CMT
+   files are read with [input_value], so constructor order and arity must match
+   the compiler exactly. ReScript 12 uses {!Typedtree_v12}. *)
+
 open Types
 
 type pattern = {
@@ -94,20 +98,20 @@ and expression_desc =
   | Texp_for of
       unit * string * expression * expression * direction_flag * expression
   | Texp_send of expression * meth * expression option
-  | Texp_new of Path.t * unit * class_declaration
-  | Texp_instvar of Path.t * Path.t * string
-  | Texp_setinstvar of Path.t * Path.t * string * expression
-  | Texp_override of Path.t * (Path.t * string * expression) list
+  (* ReScript keeps the class constructors only as placeholders, but they
+     still occupy constructor tags in marshalled CMT files. *)
+  | Texp_new of unit
+  | Texp_instvar of unit
+  | Texp_setinstvar of unit
+  | Texp_override of unit
   | Texp_letmodule of unit * string * module_expr * expression
   | Texp_letexception of extension_constructor * expression
   | Texp_assert of expression
   | Texp_lazy of expression
-  | Texp_object of class_structure * string list
+  | Texp_object of unit
   | Texp_pack of module_expr
-  | Texp_letop of { let_ : binding_op; ands : binding_op list; body : case }
   | Texp_unreachable
   | Texp_extension_constructor of Location.t * Path.t
-  | Texp_open of open_declaration * expression
 
 and meth = Tmeth_name of string | Tmeth_val of Ident.t
 and case = { c_lhs : pattern; c_guard : expression option; c_rhs : expression }
@@ -115,14 +119,6 @@ and case = { c_lhs : pattern; c_guard : expression option; c_rhs : expression }
 and record_label_definition =
   | Kept of Types.type_expr
   | Overridden of Location.t * expression
-
-and binding_op = {
-  bop_op_path : Path.t;
-  bop_op_val : value_description;
-  bop_op_type : Types.type_expr;
-  bop_exp : expression;
-  bop_loc : Location.t;
-}
 
 and value_binding = {
   vb_pat : pattern;

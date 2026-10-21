@@ -53,7 +53,7 @@ For detailed information about building the project, running tests, and contribu
 # Build the project
 make build
 
-# Run the CI-equivalent test suite (requires pnpm 8.x)
+# Run the CI-equivalent test suite (requires pnpm 10.x)
 make test
 ```
 

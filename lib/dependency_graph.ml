@@ -5,7 +5,10 @@
 module StringMap = Map.Make (String)
 
 (* Module metadata type *)
-type module_metadata = { path : string option }
+type module_metadata = {
+  path : string option; (* Source file *)
+  cmt_path : string option; (* CMT file the module was read from *)
+}
 
 (* Graph representation including module metadata *)
 type t = {
@@ -51,8 +54,8 @@ let make dependencies metadata =
   { dependencies; dependents = build_dependents dependencies; metadata }
 
 (* Add a module and its dependencies to the graph *)
-let add graph module_name dependencies path =
-  let metadata = { path } in
+let add ?cmt_path graph module_name dependencies path =
+  let metadata = { path; cmt_path } in
   let dependencies = List.sort_uniq String.compare dependencies in
   let dependents =
     match StringMap.find_opt module_name graph.dependencies with
@@ -79,7 +82,7 @@ let get_metadata_map graph = graph.metadata
 (* Get module metadata record for a module *)
 let get_module_metadata graph module_name =
   try StringMap.find module_name graph.metadata
-  with Not_found -> { path = None }
+  with Not_found -> { path = None; cmt_path = None }
 
 (* Get module path *)
 let get_module_path graph module_name =
@@ -90,7 +93,8 @@ let get_module_path graph module_name =
 let build_from_module_infos infos =
   List.fold_left
     (fun graph info ->
-      add graph info.Parser.name info.Parser.dependencies info.Parser.file_path)
+      add ?cmt_path:info.Parser.cmt_path graph info.Parser.name
+        info.Parser.dependencies info.Parser.file_path)
     empty infos
 
 (* Get the dependencies of a module *)
@@ -344,7 +348,10 @@ let create_focused_graph graph center_module =
     (* 3. Start building a new graph with just the center module *)
     (* Preserve metadata - add center module *)
     let center_metadata = get_module_metadata graph center_module in
-    let result = add empty center_module center_deps center_metadata.path in
+    let result =
+      add ?cmt_path:center_metadata.cmt_path empty center_module center_deps
+        center_metadata.path
+    in
 
     (* 4. Add dependency modules and their metadata *)
     let result =
@@ -354,7 +361,7 @@ let create_focused_graph graph center_module =
             (* In a focused graph, we only care about dependencies of the center module,
                not dependencies of dependencies, so we use empty list for deps *)
             let dep_metadata = get_module_metadata graph dep in
-            add acc dep [] dep_metadata.path
+            add ?cmt_path:dep_metadata.cmt_path acc dep [] dep_metadata.path
           else acc)
         result center_deps
     in
@@ -371,7 +378,8 @@ let create_focused_graph graph center_module =
           then
             (* Add the dependent with just one dependency - the center module *)
             let dependent_metadata = get_module_metadata graph dependent in
-            add acc dependent [ center_module ] dependent_metadata.path
+            add ?cmt_path:dependent_metadata.cmt_path acc dependent
+              [ center_module ] dependent_metadata.path
           else acc)
         result dependents
     in
@@ -383,476 +391,199 @@ let find_modules_with_no_dependents graph =
   let modules = get_modules graph in
   List.filter (fun m -> find_dependents graph m = []) modules
 
-(* Improved function for tracking let binding location/scope and path *)
-let find_let_binding_at_line_with_path value_name value_line structure =
+(* Find the let binding [value_name] declared at [value_line]. Returns the
+   module path of the binding inside its file, whether it is a top-level
+   binding, and for a local binding the top-level expression enclosing it. *)
+let find_let_binding_at_line_with_path value_name value_line items =
   let found = ref None in
-  let rec search_items items path is_top_level parent_expr =
-    List.iter
-      (fun item ->
-        match item.Typedtree.str_desc with
-        | Typedtree.Tstr_value (_, vbs) ->
-            List.iter
-              (fun vb ->
-                let loc = vb.Typedtree.vb_pat.pat_loc in
-                let start_line = loc.loc_start.pos_lnum in
-                match vb.vb_pat.pat_desc with
-                | Tpat_var (id, _) ->
-                    if Ident.name id = value_name && start_line = value_line
-                    then
-                      found :=
-                        Some (vb, List.rev path, is_top_level, parent_expr);
-                    search_expr vb.Typedtree.vb_expr path false
-                      (Some vb.Typedtree.vb_expr)
-                | _ -> ())
-              vbs
-        | Typedtree.Tstr_module { mb_id; mb_expr = { mod_desc; _ }; _ } -> (
-            let mod_name = Ident.name mb_id in
-            match mod_desc with
-            | Typedtree.Tmod_structure s ->
-                search_items s.str_items (mod_name :: path) true parent_expr
-            | Typedtree.Tmod_constraint (mexpr, _, _, _) -> (
-                match mexpr.mod_desc with
-                | Typedtree.Tmod_structure s ->
-                    search_items s.str_items (mod_name :: path) true parent_expr
-                | _ -> ())
-            | _ -> ())
-        | _ -> ())
-      items
-  and search_expr expr path is_top_level parent_expr =
-    match expr.Typedtree.exp_desc with
-    | Texp_let (_, vbs, e) ->
-        List.iter
-          (fun vb ->
-            let loc = vb.Typedtree.vb_pat.pat_loc in
-            let start_line = loc.loc_start.pos_lnum in
-            match vb.vb_pat.pat_desc with
-            | Tpat_var (id, _) ->
-                if Ident.name id = value_name && start_line = value_line then
-                  found := Some (vb, List.rev path, is_top_level, parent_expr);
-                search_expr vb.Typedtree.vb_expr path false parent_expr
-            | _ -> ())
-          vbs;
-        search_expr e path is_top_level parent_expr
-    | Texp_function { cases; _ } ->
-        List.iter
-          (fun c -> search_expr c.Typedtree.c_rhs path false parent_expr)
-          cases
-    | Texp_apply (e, args) ->
-        search_expr e path false parent_expr;
-        List.iter
-          (function
-            | _, Some e -> search_expr e path false parent_expr | _ -> ())
-          args
-    | Texp_match (e, cases, cases2, _) ->
-        search_expr e path false parent_expr;
-        List.iter
-          (fun c -> search_expr c.Typedtree.c_rhs path false parent_expr)
-          (cases @ cases2)
-    | Texp_tuple elist | Texp_array elist ->
-        List.iter (fun e -> search_expr e path false parent_expr) elist
-    | Texp_construct (_, _, elist) ->
-        List.iter (fun e -> search_expr e path false parent_expr) elist
-    | Texp_variant (_, eo) ->
-        Option.iter (fun e -> search_expr e path false parent_expr) eo
-    | Texp_record { fields; extended_expression; _ } ->
-        Array.iter
-          (function
-            | _, Typedtree.Overridden (_, e) ->
-                search_expr e path false parent_expr
-            | _ -> ())
-          fields;
-        Option.iter
-          (fun e -> search_expr e path false parent_expr)
-          extended_expression
-    | Texp_field (e, _, _) -> search_expr e path false parent_expr
-    | Texp_setfield (e1, _, _, e2) ->
-        search_expr e1 path false parent_expr;
-        search_expr e2 path false parent_expr
-    | Texp_ifthenelse (e1, e2, eo) ->
-        search_expr e1 path false parent_expr;
-        search_expr e2 path false parent_expr;
-        Option.iter (fun e -> search_expr e path false parent_expr) eo
-    | Texp_sequence (e1, e2) ->
-        search_expr e1 path false parent_expr;
-        search_expr e2 path false parent_expr
-    | Texp_while (e1, e2) ->
-        search_expr e1 path false parent_expr;
-        search_expr e2 path false parent_expr
-    | Texp_for (_, _, e1, e2, _, e3) ->
-        search_expr e1 path false parent_expr;
-        search_expr e2 path false parent_expr;
-        search_expr e3 path false parent_expr
-    | Texp_send (e, _, eo) ->
-        search_expr e path false parent_expr;
-        Option.iter (fun e -> search_expr e path false parent_expr) eo
-    | Texp_open (_, e) -> search_expr e path false parent_expr
-    | _ -> ()
+  let is_target (binding : Typed_ast.binding) =
+    binding.name = Some value_name && binding.line = value_line
   in
-  search_items structure.Typedtree.str_items [] true None;
+  let rec search_items path items =
+    List.iter
+      (function
+        | Typed_ast.Values bindings ->
+            List.iter
+              (fun (binding : Typed_ast.binding) ->
+                if is_target binding then
+                  found := Some (List.rev path, true, None);
+                search_expr path binding.expr binding.expr)
+              bindings
+        | Typed_ast.Module (name, items) -> search_items (name :: path) items
+        | Typed_ast.Include items -> search_items path items
+        | Typed_ast.Eval expr -> search_expr path expr expr)
+      items
+  and search_local_bindings path parent bindings =
+    List.iter
+      (fun (binding : Typed_ast.binding) ->
+        if is_target binding then
+          found := Some (List.rev path, false, Some parent);
+        search_expr path parent binding.expr)
+      bindings
+  and search_local_items path parent items =
+    List.iter
+      (function
+        | Typed_ast.Values bindings ->
+            search_local_bindings path parent bindings
+        | Typed_ast.Module (_, items) | Typed_ast.Include items ->
+            search_local_items path parent items
+        | Typed_ast.Eval expr -> search_expr path parent expr)
+      items
+  and search_expr path parent = function
+    | Typed_ast.Ident _ -> ()
+    | Typed_ast.Let (bindings, body) ->
+        search_local_bindings path parent bindings;
+        search_expr path parent body
+    | Typed_ast.Struct items -> search_local_items path parent items
+    | Typed_ast.Node children -> List.iter (search_expr path parent) children
+  in
+  search_items [] items;
   !found
 
-let rec count_in_expression value_name path open_modules current_module
-    target_module is_top_level expr =
-  let value_id = value_name in
-  let value_mod_path = path in
-  let rec path_to_list path =
-    match path with
-    | Path.Pident id -> [ Ident.name id ]
-    | Path.Pdot (p, id, _) -> path_to_list p @ [ id ]
-    | _ -> [ Path.name path ]
-  in
-  match expr.Typedtree.exp_desc with
-  | Typedtree.Texp_ident (path_ast, _, _) ->
-      let used_path = path_to_list path_ast in
-      let result =
-        if not is_top_level then
-          match used_path with [ id ] when id = value_id -> 1 | _ -> 0
-        else if current_module = target_module then
-          match used_path with
-          | m :: rest
-            when m = target_module && rest = value_mod_path @ [ value_id ] ->
-              1
-          | [ id ] when id = value_id -> 1
-          | _ -> 0
-        else
-          match used_path with
-          | m :: rest
-            when m = target_module && rest = value_mod_path @ [ value_id ] ->
-              1
-          | _ -> 0
-      in
-      result
-  | Typedtree.Texp_let (_, vbs, e) ->
+let rec count_in_expression matches = function
+  | Typed_ast.Ident path -> if matches path then 1 else 0
+  | Typed_ast.Let (bindings, body) ->
       List.fold_left
-        (fun acc vb ->
-          acc
-          + count_in_expression value_name path [] current_module target_module
-              is_top_level vb.Typedtree.vb_expr)
-        (count_in_expression value_name path [] current_module target_module
-           is_top_level e)
-        vbs
-  | Typedtree.Texp_try (e, cases) ->
-      count_in_expression value_name path open_modules current_module
-        target_module is_top_level e
-      + List.fold_left
-          (fun acc c ->
-            acc
-            + count_in_expression value_name path open_modules current_module
-                target_module is_top_level c.Typedtree.c_rhs)
-          0 cases
-  | Typedtree.Texp_function { cases; _ } ->
+        (fun acc (binding : Typed_ast.binding) ->
+          acc + count_in_expression matches binding.expr)
+        (count_in_expression matches body)
+        bindings
+  | Typed_ast.Struct items -> count_in_items matches items
+  | Typed_ast.Node children ->
       List.fold_left
-        (fun acc c ->
-          acc
-          + count_in_expression value_name path [] current_module target_module
-              is_top_level c.Typedtree.c_rhs)
-        0 cases
-  | Typedtree.Texp_apply (e, args) ->
-      List.fold_left
-        (fun acc (_, eo) ->
-          acc
-          +
-          match eo with
-          | Some e ->
-              count_in_expression value_name path [] current_module
-                target_module is_top_level e
-          | None -> 0)
-        (count_in_expression value_name path [] current_module target_module
-           is_top_level e)
-        args
-  | Typedtree.Texp_match (e, cases, cases2, _) ->
-      count_in_expression value_name path [] current_module target_module
-        is_top_level e
-      + List.fold_left
-          (fun acc c ->
-            acc
-            + count_in_expression value_name path [] current_module
-                target_module is_top_level c.Typedtree.c_rhs)
-          0 (cases @ cases2)
-  | Typedtree.Texp_tuple elist | Typedtree.Texp_array elist ->
-      List.fold_left
-        (fun acc e ->
-          acc
-          + count_in_expression value_name path [] current_module target_module
-              is_top_level e)
-        0 elist
-  | Typedtree.Texp_construct (_, _, elist) ->
-      List.fold_left
-        (fun acc e ->
-          acc
-          + count_in_expression value_name path [] current_module target_module
-              is_top_level e)
-        0 elist
-  | Typedtree.Texp_variant (_, eo) -> (
-      match eo with
-      | Some e ->
-          count_in_expression value_name path [] current_module target_module
-            is_top_level e
-      | None -> 0)
-  | Typedtree.Texp_record { fields; extended_expression; _ } -> (
-      let acc =
-        Array.fold_left
-          (fun acc (_, fld) ->
-            match fld with
-            | Typedtree.Overridden (_, e) ->
-                acc
-                + count_in_expression value_name path [] current_module
-                    target_module is_top_level e
-            | Typedtree.Kept _ -> acc)
-          0 fields
-      in
-      match extended_expression with
-      | Some e ->
-          acc
-          + count_in_expression value_name path [] current_module target_module
-              is_top_level e
-      | None -> acc)
-  | Typedtree.Texp_field (e, _, _) ->
-      count_in_expression value_name path [] current_module target_module
-        is_top_level e
-  | Typedtree.Texp_setfield (e1, _, _, e2) ->
-      count_in_expression value_name path [] current_module target_module
-        is_top_level e1
-      + count_in_expression value_name path [] current_module target_module
-          is_top_level e2
-  | Typedtree.Texp_ifthenelse (e1, e2, eo) -> (
-      count_in_expression value_name path [] current_module target_module
-        is_top_level e1
-      + count_in_expression value_name path [] current_module target_module
-          is_top_level e2
-      +
-      match eo with
-      | Some e ->
-          count_in_expression value_name path [] current_module target_module
-            is_top_level e
-      | None -> 0)
-  | Typedtree.Texp_sequence (e1, e2) ->
-      count_in_expression value_name path [] current_module target_module
-        is_top_level e1
-      + count_in_expression value_name path [] current_module target_module
-          is_top_level e2
-  | Typedtree.Texp_while (e1, e2) ->
-      count_in_expression value_name path [] current_module target_module
-        is_top_level e1
-      + count_in_expression value_name path [] current_module target_module
-          is_top_level e2
-  | Typedtree.Texp_for (_, _, e1, e2, _, e3) ->
-      count_in_expression value_name path [] current_module target_module
-        is_top_level e1
-      + count_in_expression value_name path [] current_module target_module
-          is_top_level e2
-      + count_in_expression value_name path [] current_module target_module
-          is_top_level e3
-  | Typedtree.Texp_send (e, _, eo) -> (
-      count_in_expression value_name path [] current_module target_module
-        is_top_level e
-      +
-      match eo with
-      | Some e ->
-          count_in_expression value_name path [] current_module target_module
-            is_top_level e
-      | None -> 0)
-  | Typedtree.Texp_open (open_decl, e) ->
-      let open_mod =
-        match open_decl.open_expr.mod_desc with
-        | Typedtree.Tmod_ident (path_ast, _) -> Path.name path_ast
-        | _ -> ""
-      in
-      count_in_expression value_name path (open_mod :: open_modules)
-        current_module target_module is_top_level e
-  | Typedtree.Texp_letmodule (_, _, _, expr) ->
-      count_in_expression value_name path open_modules current_module
-        target_module is_top_level expr
-  | Typedtree.Texp_object _ -> 0
-  | Typedtree.Texp_constant _ -> 0
-  | Typedtree.Texp_letexception (_, expr) ->
-      count_in_expression value_name path open_modules current_module
-        target_module is_top_level expr
-  | Typedtree.Texp_letop { let_; ands; body } ->
-      let acc =
-        count_in_expression value_name path open_modules current_module
-          target_module is_top_level let_.bop_exp
-        + List.fold_left
-            (fun acc (and_ : Typedtree.binding_op) ->
-              acc
-              + count_in_expression value_name path open_modules current_module
-                  target_module is_top_level and_.bop_exp)
-            0 ands
-      in
+        (fun acc expr -> acc + count_in_expression matches expr)
+        0 children
+
+and count_in_items matches items =
+  List.fold_left
+    (fun acc item ->
       acc
-      + count_in_expression value_name path open_modules current_module
-          target_module is_top_level body.c_rhs
-  | Typedtree.Texp_assert e ->
-      count_in_expression value_name path open_modules current_module
-        target_module is_top_level e
-  | Typedtree.Texp_lazy e ->
-      count_in_expression value_name path open_modules current_module
-        target_module is_top_level e
-  | Typedtree.Texp_override (_, lst) ->
-      List.fold_left
-        (fun acc (_, _, e) ->
-          acc
-          + count_in_expression value_name path open_modules current_module
-              target_module is_top_level e)
-        0 lst
-  | Typedtree.Texp_setinstvar (_, _, _, e) ->
-      count_in_expression value_name path open_modules current_module
-        target_module is_top_level e
-  | Typedtree.Texp_pack _ -> 0
-  | Typedtree.Texp_unreachable -> 0
-  | Typedtree.Texp_extension_constructor (_, _) -> 0
-  | Typedtree.Texp_instvar _ -> 0
-  | Typedtree.Texp_new _ -> 0
+      +
+      match item with
+      | Typed_ast.Values bindings ->
+          List.fold_left
+            (fun acc (binding : Typed_ast.binding) ->
+              acc + count_in_expression matches binding.expr)
+            0 bindings
+      | Typed_ast.Module (_, items) | Typed_ast.Include items ->
+          count_in_items matches items
+      | Typed_ast.Eval expr -> count_in_expression matches expr)
+    0 items
 
-and count_in_structure value_name path current_module target_module is_top_level
-    structure =
-  let result =
-    List.fold_left
-      (fun acc item ->
-        match item.Typedtree.str_desc with
-        | Typedtree.Tstr_value (_, vbs) ->
-            let acc' =
-              acc
-              + List.fold_left
-                  (fun acc vb ->
-                    acc
-                    + count_in_expression value_name path [] current_module
-                        target_module is_top_level vb.Typedtree.vb_expr)
-                  0 vbs
-            in
-            acc'
-        | Typedtree.Tstr_eval (e, _) ->
-            let acc' =
-              acc
-              + count_in_expression value_name path [] current_module
-                  target_module is_top_level e
-            in
-            acc'
-        | Typedtree.Tstr_module { mb_expr = { mod_desc; _ }; _ } -> (
-            match mod_desc with
-            | Typedtree.Tmod_structure s ->
-                let acc' =
-                  acc
-                  + count_in_structure value_name path current_module
-                      target_module is_top_level s
-                in
-                acc'
-            | Typedtree.Tmod_constraint (mexpr, _, _, _) -> (
-                match mexpr.mod_desc with
-                | Typedtree.Tmod_structure s ->
-                    let acc' =
-                      acc
-                      + count_in_structure value_name path current_module
-                          target_module is_top_level s
-                    in
-                    acc'
-                | _ -> acc)
-            | _ -> acc)
-        | _ -> acc)
-      0 structure.Typedtree.str_items
+(* The namespace of a compilation unit, e.g. "App-MyNs" -> Some "MyNs" *)
+let namespace_of_modname modname =
+  match String.rindex_opt modname '-' with
+  | Some idx when idx + 1 < String.length modname ->
+      Some (String.sub modname (idx + 1) (String.length modname - idx - 1))
+  | _ -> None
+
+(* Namespaced builds name compilation units "Utils-MyNs" and may reach them
+   through the namespace module "MyNs", so normalize the module part of a path
+   before comparing it with graph module names. *)
+let normalize_value_path ~namespace path =
+  let path =
+    match (path, namespace) with
+    | ns :: (_ :: _ :: _ as rest), Some namespace when ns = namespace -> rest
+    | _ -> path
   in
-  result
+  match path with
+  | m :: (_ :: _ as rest) -> Parse_utils.normalize_module_name m :: rest
+  | _ -> path
 
-(* Count value usage in dependents of a module *)
+(* Build the predicate that decides whether a resolved value path refers to the
+   binding being counted. [value_path] is the submodule path of the binding
+   inside [target_module]. *)
+let value_path_matcher ~namespace ~local ~in_target_module ~target_module
+    ~value_path ~value_name =
+  let qualified = value_path @ [ value_name ] in
+  fun path ->
+    let path = normalize_value_path ~namespace path in
+    if local then path = [ value_name ]
+    else
+      match path with
+      | m :: rest when m = target_module && rest = qualified -> true
+      | _ -> in_target_module && (path = [ value_name ] || path = qualified)
+
+let find_cmt_path metadata =
+  match metadata.cmt_path with
+  | Some cmt_path when Sys.file_exists cmt_path -> Some cmt_path
+  | _ -> (
+      match metadata.path with
+      | Some file_path ->
+          let cmt_path =
+            Parser.DependencyExtractor.get_cmt_path_for_source file_path
+          in
+          if Sys.file_exists cmt_path then Some cmt_path else None
+      | None -> None)
+
+let read_typed_implementation cmt_path =
+  let cmt_info = Cmt_format.read_cmt cmt_path in
+  ( Typed_ast.implementation cmt_info,
+    namespace_of_modname cmt_info.Cmt_format.cmt_modname )
+
+(* Count value usage in dependents of a module (and in the module itself).
+   Negative counts report why a module could not be analyzed:
+   -2 no implementation, -3 unreadable CMT, -4 no CMT file, -5 no file path. *)
 let count_value_usage_in_dependents graph ~module_name ~value_name ~value_line =
-  let open Stdlib in
-  let open Cmt_format in
-  (* Also search for usage in the module itself, not just in dependents *)
   let dependents =
     List.sort_uniq String.compare
       (module_name :: find_dependents graph module_name)
   in
-  let find_cmt_path file_path =
-    let cmt_path =
-      Parser.DependencyExtractor.get_cmt_path_for_source file_path
-    in
-    if Sys.file_exists cmt_path then Some cmt_path else None
-  in
-  let target_path, is_top_level, _ =
+  (* Locate the binding in the target module to learn its submodule path and
+     whether it is a top-level binding *)
+  let target_binding =
     match value_line with
-    | Some line ->
-        let file_path_opt = get_module_path graph module_name in
-        let result =
-          match file_path_opt with
-          | Some file_path -> (
-              let cmt_path_opt = find_cmt_path file_path in
-              match cmt_path_opt with
-              | Some cmt_path -> (
-                  try
-                    let cmt_info = Cmt_format.read_cmt cmt_path in
-                    match cmt_info.cmt_annots with
-                    | Implementation structure -> (
-                        match
-                          find_let_binding_at_line_with_path value_name line
-                            structure
-                        with
-                        | Some (_, path, is_top, parent_expr) ->
-                            (path, is_top, parent_expr)
-                        | None -> ([], true, None))
-                    | _ -> ([], true, None)
-                  with _ -> ([], true, None))
-              | None -> ([], true, None))
-          | None -> ([], true, None)
-        in
-        result
-    | None -> ([], true, None)
+    | None -> None
+    | Some line -> (
+        match find_cmt_path (get_module_metadata graph module_name) with
+        | Some cmt_path -> (
+            try
+              match read_typed_implementation cmt_path with
+              | Some items, _ ->
+                  find_let_binding_at_line_with_path value_name line items
+              | None, _ -> None
+            with _ -> None)
+        | None -> None)
   in
   List.map
     (fun dep ->
-      let file_path_opt = get_module_path graph dep in
-      match file_path_opt with
-      | Some file_path -> (
-          let cmt_path_opt = find_cmt_path file_path in
-          match cmt_path_opt with
-          | Some cmt_path -> (
-              try
-                let cmt_info = Cmt_format.read_cmt cmt_path in
-                match cmt_info.cmt_annots with
-                | Implementation structure -> (
-                    match value_line with
-                    | Some line ->
-                        if dep = module_name then
-                          let binding_result =
-                            find_let_binding_at_line_with_path value_name line
-                              structure
-                          in
-                          match binding_result with
-                          | Some (_, _, is_top_level, parent_expr) ->
-                              if is_top_level then
-                                let count =
-                                  count_in_structure value_name target_path dep
-                                    module_name true structure
-                                in
-                                (dep, count)
-                              else
-                                let count =
-                                  match parent_expr with
-                                  | Some expr ->
-                                      count_in_expression value_name target_path
-                                        [] dep module_name false expr
-                                  | None -> 0
-                                in
-                                (dep, count)
-                          | None -> (dep, 0)
-                        else if not is_top_level then (dep, 0)
-                          (* If the let binding we're looking for is not at top level, no need to search in dependent modules *)
-                        else
-                          let count =
-                            count_in_structure value_name target_path dep
-                              module_name true structure
-                          in
-                          (dep, count)
-                    | None ->
-                        let count =
-                          count_in_structure value_name [] dep module_name true
-                            structure
-                        in
-                        (dep, count))
-                | _ -> (dep, -2)
-                (* -2: No implementation AST *)
-              with _ -> (dep, -3) (* -3: CMT read error *))
-          | None -> (dep, -4)
-          (* -4: No .cmt file found *))
-      | None -> (dep, -5)
-      (* -5: No file path found *))
+      let metadata = get_module_metadata graph dep in
+      match find_cmt_path metadata with
+      | None ->
+          if metadata.path = None && metadata.cmt_path = None then (dep, -5)
+          else (dep, -4)
+      | Some cmt_path -> (
+          try
+            match read_typed_implementation cmt_path with
+            | None, _ -> (dep, -2)
+            | Some items, namespace ->
+                let in_target_module = dep = module_name in
+                let count_top_level value_path =
+                  count_in_items
+                    (value_path_matcher ~namespace ~local:false
+                       ~in_target_module ~target_module:module_name ~value_path
+                       ~value_name)
+                    items
+                in
+                let count =
+                  match (value_line, target_binding) with
+                  | None, _ -> count_top_level []
+                  | Some _, None ->
+                      if in_target_module then 0 else count_top_level []
+                  | Some _, Some (value_path, true, _) ->
+                      count_top_level value_path
+                  | Some _, Some (_, false, parent_expr) -> (
+                      (* A local binding can only be used inside the top-level
+                         expression that encloses it *)
+                      match parent_expr with
+                      | Some expr when in_target_module ->
+                          count_in_expression
+                            (value_path_matcher ~namespace ~local:true
+                               ~in_target_module ~target_module:module_name
+                               ~value_path:[] ~value_name)
+                            expr
+                      | _ -> 0)
+                in
+                (dep, count)
+          with _ -> (dep, -3)))
     dependents

@@ -12,12 +12,14 @@
   test_rescriptdep
   test_cmt_imports
   test_cmt_values
-  test_ast)
+  test_ast
+  test_value_usage)
  (modules
   test_rescriptdep
   test_cmt_imports
   test_cmt_values
-  test_ast)
+  test_ast
+  test_value_usage)
  (libraries rescriptdep str test_support))
 
 (executable

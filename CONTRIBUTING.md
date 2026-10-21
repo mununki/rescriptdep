@@ -20,13 +20,16 @@ dune build --profile static
 You can run tests using the following methods:
 
 ```bash
-# Run the CI-equivalent test suite (requires pnpm 8.x)
+# Run the CI-equivalent test suite (requires pnpm 10.x)
 make test
 
 # Run specific tests:
 dune exec test/test_cmt_values.exe   # Test value dependency information
 dune exec test/test_cmt_imports.exe  # Test import information
+dune exec test/test_ast.exe          # Test reading module references from .ast files
 dune exec test/test_rescriptdep.exe  # Test dependency analysis on sample projects
+dune exec test/test_value_usage.exe  # Test value usage counts (-vb) on sample projects
+dune exec test/test_namespace.exe    # Test namespace handling (self-contained)
 ```
 
 ### Test Structure
@@ -35,7 +38,10 @@ The test code is located in the `test/` directory and includes:
 
 - `test_cmt_imports.ml`: Tests the import information from cmt files
 - `test_cmt_values.ml`: Tests the value dependency information from cmt files
+- `test_ast.ml`: Tests reading module references from compiler-generated .ast files
 - `test_rescriptdep.ml`: Tests the dependency analysis on sample ReScript projects
+- `test_value_usage.ml`: Tests value usage counts on ReScript 11 and 12 projects
+- `test_namespace.ml`: Tests namespace handling without compiled fixtures
 - `benchmark.ml`: Performance benchmark for the parser
 
 ### Test Fixtures
@@ -46,7 +52,9 @@ The test system uses two types of fixtures:
 
 The dependency analysis tests use JSON fixtures to ensure consistent behavior:
 
-- `test/fixtures/rescript.json`: Reference output for the rescript test project
+- `test/fixtures/rescript.json`: Reference output for the ReScript 11 test project
+- `test/fixtures/rescript12_basic.json`: Reference output for the ReScript 12 test project
+- `test/fixtures/rescript12_namespaced.json`: Reference output for the namespaced ReScript 12 test project
 
 These fixtures are automatically generated on first run and serve as reference points for future test runs. If the dependency analysis output differs from these fixtures, the test will fail and show a diff of the changes.
 
@@ -54,7 +62,10 @@ These fixtures are automatically generated on first run and serve as reference p
 
 The test directory contains sample ReScript projects used for testing the dependency analyzer:
 
-- `test/rescript/`: Sample ReScript project with standard ReScript setup
+- `test/rescript/`: Sample ReScript 11 project with standard ReScript setup
+- `test/rescript12/`: pnpm workspace with ReScript 12 projects built from the same sources:
+  `basic/` (standard setup) and `namespaced/` (`"namespace": true`). `math.res` is
+  named `mathUtil.res` there because ReScript 12 resolves `Math` to `Stdlib.Math`.
 
 Each test project contains:
 - `src/`: Source code files (.res, .resi)
@@ -69,7 +80,7 @@ When making changes that affect dependency analysis:
 
 1. Review the test output diff carefully to ensure changes are expected
 2. If the changes are intentional:
-   - Delete the existing fixture file: `rm test/fixtures/rescript.json`
+   - Delete the existing fixture file, e.g. `rm test/fixtures/rescript.json`
    - Run the tests again to generate new fixtures: `dune exec test/test_rescriptdep.exe`
    - Commit both the code changes and the updated fixtures
 

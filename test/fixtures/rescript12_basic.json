@@ -1,0 +1,109 @@
+{
+  "modules": [
+    {
+      "name": "App",
+      "path": "test/rescript12/basic/src/app.res",
+      "dependencies": [
+        {
+          "name": "Comp0",
+          "path": "test/rescript12/basic/src/comp0.res"
+        },
+        {
+          "name": "Logger",
+          "path": "test/rescript12/basic/src/logger.res"
+        },
+        {
+          "name": "MathUtil",
+          "path": "test/rescript12/basic/src/mathUtil.res"
+        },
+        {
+          "name": "React",
+          "path": "test/rescript12/basic/node_modules/@rescript/react/src"
+        }
+      ],
+      "dependents": [],
+      "fan_in": 0,
+      "fan_out": 4,
+      "in_cycle": false
+    },
+    {
+      "name": "Comp0",
+      "path": "test/rescript12/basic/src/comp0.res",
+      "dependencies": [
+        {
+          "name": "React",
+          "path": "test/rescript12/basic/node_modules/@rescript/react/src"
+        },
+        {
+          "name": "ReactDOM",
+          "path": "test/rescript12/basic/node_modules/@rescript/react/src"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "App",
+          "path": "test/rescript12/basic/src/app.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 2,
+      "in_cycle": false
+    },
+    {
+      "name": "Logger",
+      "path": "test/rescript12/basic/src/logger.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "App",
+          "path": "test/rescript12/basic/src/app.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    },
+    {
+      "name": "MathUtil",
+      "path": "test/rescript12/basic/src/mathUtil.res",
+      "dependencies": [
+        {
+          "name": "Utils",
+          "path": "test/rescript12/basic/src/utils.res"
+        }
+      ],
+      "dependents": [
+        {
+          "name": "App",
+          "path": "test/rescript12/basic/src/app.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 1,
+      "in_cycle": false
+    },
+    {
+      "name": "Utils",
+      "path": "test/rescript12/basic/src/utils.res",
+      "dependencies": [],
+      "dependents": [
+        {
+          "name": "MathUtil",
+          "path": "test/rescript12/basic/src/mathUtil.res"
+        }
+      ],
+      "fan_in": 1,
+      "fan_out": 0,
+      "in_cycle": false
+    }
+  ],
+  "cycles": [],
+  "metrics": {
+    "total_modules": 5,
+    "average_fan_in": 0.8,
+    "average_fan_out": 1.4,
+    "most_depended_upon": {"module": "Comp0", "count": 1},
+    "most_dependencies": {"module": "App", "count": 4},
+    "cycles_count": 0
+  }
+}
