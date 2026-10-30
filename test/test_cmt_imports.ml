@@ -22,14 +22,6 @@ let stdlib_modules =
     "Caml1999I022";
     "Has_arity1";
     "Has_arity2";
-    "DA";
-    "GitHub";
-    "Users";
-    "TH";
-    "BZ";
-    "BZf";
-    "Bgk";
-    "Bgq";
     (* Additional internal modules *)
     "CamlinternalLazy";
     "CamlinternalFormat";

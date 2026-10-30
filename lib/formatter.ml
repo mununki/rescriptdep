@@ -10,6 +10,38 @@ type format =
   (* Format as Graphviz DOT *)
   | Json (* Format as JSON *)
 
+(* Escape a string for a double-quoted DOT ID, where a backslash and a double
+   quote must be preceded by a backslash. A backslash left alone would also
+   start an escape sequence such as \N in label and tooltip values. *)
+let escape_dot s =
+  if not (String.exists (fun c -> c = '\\' || c = '"') s) then s
+  else
+    let buf = Buffer.create (String.length s + 8) in
+    String.iter
+      (fun c ->
+        if c = '\\' || c = '"' then Buffer.add_char buf '\\';
+        Buffer.add_char buf c)
+      s;
+    Buffer.contents buf
+
+(* Escape a string for a JSON string literal: backslashes, double quotes and
+   control characters *)
+let escape_json s =
+  if not (String.exists (fun c -> c = '\\' || c = '"' || c < ' ') s) then s
+  else
+    let buf = Buffer.create (String.length s + 8) in
+    String.iter
+      (function
+        | '"' -> Buffer.add_string buf "\\\""
+        | '\\' -> Buffer.add_string buf "\\\\"
+        | '\n' -> Buffer.add_string buf "\\n"
+        | '\r' -> Buffer.add_string buf "\\r"
+        | '\t' -> Buffer.add_string buf "\\t"
+        | c when c < ' ' -> Printf.bprintf buf "\\u%04x" (Char.code c)
+        | c -> Buffer.add_char buf c)
+      s;
+    Buffer.contents buf
+
 (* Output a dependency graph in the specified format *)
 let rec output_graph format graph out_channel =
   match format with
@@ -42,27 +74,33 @@ and output_dot graph out_channel =
       | None -> ())
     modules;
 
-  (* Helper function to resolve path for a module *)
+  (* Helper function to resolve path for a module. Found paths are kept in
+     [path_map] and misses in [unresolved], so each module is looked up on
+     disk at most once. *)
+  let unresolved = Hashtbl.create 16 in
   let resolve_path m =
-    try Some (Hashtbl.find path_map m)
-    with Not_found -> (
-      match Parse_utils.find_implementation_file_by_name m !source_dirs with
-      | Some p ->
-          Hashtbl.add path_map m p;
-          Some p
-      | None -> (
-          (* If not found, try to resolve from node_modules *)
-          let node_path_opt =
-            if List.length !source_dirs > 0 then
-              Parse_utils.find_external_module_path m
-                (Filename.dirname (List.hd !source_dirs))
-            else None
-          in
-          match node_path_opt with
-          | Some p ->
-              Hashtbl.add path_map m p;
-              Some p
-          | None -> None))
+    try Some (Hashtbl.find path_map m) with
+    | Not_found when Hashtbl.mem unresolved m -> None
+    | Not_found -> (
+        match Parse_utils.find_implementation_file_by_name m !source_dirs with
+        | Some p ->
+            Hashtbl.add path_map m p;
+            Some p
+        | None -> (
+            (* If not found, try to resolve from node_modules *)
+            let node_path_opt =
+              if List.length !source_dirs > 0 then
+                Parse_utils.find_external_module_path m
+                  (Filename.dirname (List.hd !source_dirs))
+              else None
+            in
+            match node_path_opt with
+            | Some p ->
+                Hashtbl.add path_map m p;
+                Some p
+            | None ->
+                Hashtbl.replace unresolved m ();
+                None))
   in
 
   (* Collect all modules including external dependencies *)
@@ -91,17 +129,17 @@ and output_dot graph out_channel =
       let label_parts = [ module_name ] in
 
       (* Create label with metadata *)
-      let label = String.concat "\\n" label_parts in
+      let label = String.concat "\\n" (List.map escape_dot label_parts) in
 
       (* Create tooltip with file path if available *)
       let tooltip =
         match path_opt with
-        | Some path_str -> "tooltip=\"" ^ path_str ^ "\""
+        | Some path_str -> "tooltip=\"" ^ escape_dot path_str ^ "\""
         | None -> ""
       in
 
       output_string out_channel
-        ("  \"" ^ module_name ^ "\" [label=\"" ^ label ^ "\""
+        ("  \"" ^ escape_dot module_name ^ "\" [label=\"" ^ label ^ "\""
         ^ (if tooltip <> "" then ", " ^ tooltip else "")
         ^ "];\n"))
     all_modules;
@@ -120,7 +158,8 @@ and output_dot graph out_channel =
       List.iter
         (fun dep ->
           output_string out_channel
-            ("  \"" ^ module_name ^ "\" -> \"" ^ dep ^ "\";\n"))
+            ("  \"" ^ escape_dot module_name ^ "\" -> \"" ^ escape_dot dep
+           ^ "\";\n"))
         sorted_deps)
     sorted_modules;
 
@@ -139,7 +178,8 @@ and output_dot graph out_channel =
           (* Sort modules in the cycle alphabetically *)
           let sorted_scc = List.sort String.compare scc in
           List.iter
-            (fun m -> output_string out_channel ("    \"" ^ m ^ "\";\n"))
+            (fun m ->
+              output_string out_channel ("    \"" ^ escape_dot m ^ "\";\n"))
             sorted_scc;
           output_string out_channel "  }\n"))
       sccs);
@@ -208,27 +248,33 @@ and output_json graph out_channel =
         deps)
     modules;
 
-  (* Helper function to resolve path for a module *)
+  (* Helper function to resolve path for a module. Found paths are kept in
+     [path_map] and misses in [unresolved], so each module is looked up on
+     disk at most once. *)
+  let unresolved = Hashtbl.create 16 in
   let resolve_path m =
-    try Some (Hashtbl.find path_map m)
-    with Not_found -> (
-      match Parse_utils.find_implementation_file_by_name m !source_dirs with
-      | Some p ->
-          Hashtbl.add path_map m p;
-          Some p
-      | None -> (
-          (* If not found, try to resolve from node_modules *)
-          let node_path_opt =
-            if List.length !source_dirs > 0 then
-              Parse_utils.find_external_module_path m
-                (Filename.dirname (List.hd !source_dirs))
-            else None
-          in
-          match node_path_opt with
-          | Some p ->
-              Hashtbl.add path_map m p;
-              Some p
-          | None -> None))
+    try Some (Hashtbl.find path_map m) with
+    | Not_found when Hashtbl.mem unresolved m -> None
+    | Not_found -> (
+        match Parse_utils.find_implementation_file_by_name m !source_dirs with
+        | Some p ->
+            Hashtbl.add path_map m p;
+            Some p
+        | None -> (
+            (* If not found, try to resolve from node_modules *)
+            let node_path_opt =
+              if List.length !source_dirs > 0 then
+                Parse_utils.find_external_module_path m
+                  (Filename.dirname (List.hd !source_dirs))
+              else None
+            in
+            match node_path_opt with
+            | Some p ->
+                Hashtbl.add path_map m p;
+                Some p
+            | None ->
+                Hashtbl.replace unresolved m ();
+                None))
   in
 
   (* JSON opening *)
@@ -248,12 +294,14 @@ and output_json graph out_channel =
       in
 
       output_string out_channel "    {\n";
-      output_string out_channel ("      \"name\": \"" ^ module_name ^ "\",\n");
+      output_string out_channel
+        ("      \"name\": \"" ^ escape_json module_name ^ "\",\n");
 
       (* Add file path info if available *)
       (match path_opt with
       | Some path_str ->
-          output_string out_channel ("      \"path\": \"" ^ path_str ^ "\",\n")
+          output_string out_channel
+            ("      \"path\": \"" ^ escape_json path_str ^ "\",\n")
       | None -> output_string out_channel "      \"path\": null,\n");
 
       (* Dependencies - modules this module depends on *)
@@ -266,13 +314,14 @@ and output_json graph out_channel =
             let dep_path_opt = resolve_path dep in
 
             output_string out_channel "        {\n";
-            output_string out_channel ("          \"name\": \"" ^ dep ^ "\"");
+            output_string out_channel
+              ("          \"name\": \"" ^ escape_json dep ^ "\"");
 
             (* Add dependency file path if available *)
             (match dep_path_opt with
             | Some path_str ->
                 output_string out_channel
-                  (",\n          \"path\": \"" ^ path_str ^ "\"")
+                  (",\n          \"path\": \"" ^ escape_json path_str ^ "\"")
             | None -> output_string out_channel ",\n          \"path\": null");
 
             output_string out_channel "\n        }";
@@ -294,13 +343,13 @@ and output_json graph out_channel =
 
             output_string out_channel "        {\n";
             output_string out_channel
-              ("          \"name\": \"" ^ dependent ^ "\"");
+              ("          \"name\": \"" ^ escape_json dependent ^ "\"");
 
             (* Add dependent file path if available *)
             (match dependent_path_opt with
             | Some path_str ->
                 output_string out_channel
-                  (",\n          \"path\": \"" ^ path_str ^ "\"")
+                  (",\n          \"path\": \"" ^ escape_json path_str ^ "\"")
             | None -> output_string out_channel ",\n          \"path\": null");
 
             output_string out_channel "\n        }";
@@ -343,7 +392,7 @@ and output_json graph out_channel =
         output_string out_channel "    [";
         List.iteri
           (fun j module_name ->
-            output_string out_channel ("\"" ^ module_name ^ "\"");
+            output_string out_channel ("\"" ^ escape_json module_name ^ "\"");
             if j < List.length cycle - 1 then output_string out_channel ", ")
           cycle;
         output_string out_channel "]";
@@ -406,12 +455,14 @@ and output_json graph out_channel =
   in
 
   output_string out_channel
-    ("    \"most_depended_upon\": {\"module\": \"" ^ max_fan_in_module
-   ^ "\", \"count\": " ^ string_of_int max_fan_in ^ "},\n");
+    ("    \"most_depended_upon\": {\"module\": \""
+    ^ escape_json max_fan_in_module
+    ^ "\", \"count\": " ^ string_of_int max_fan_in ^ "},\n");
 
   output_string out_channel
-    ("    \"most_dependencies\": {\"module\": \"" ^ max_fan_out_module
-   ^ "\", \"count\": " ^ string_of_int max_fan_out ^ "},\n");
+    ("    \"most_dependencies\": {\"module\": \""
+    ^ escape_json max_fan_out_module
+    ^ "\", \"count\": " ^ string_of_int max_fan_out ^ "},\n");
 
   output_string out_channel
     ("    \"cycles_count\": " ^ string_of_int (List.length cycles) ^ "\n");
@@ -426,7 +477,8 @@ let output_no_dependents_dot modules out_channel =
   output_string out_channel "  rankdir=LR;\n";
   output_string out_channel "  node [shape=box];\n";
   List.iter
-    (fun m -> output_string out_channel (Printf.sprintf "  \"%s\";\n" m))
+    (fun m ->
+      output_string out_channel (Printf.sprintf "  \"%s\";\n" (escape_dot m)))
     modules;
   output_string out_channel "}\n"
 
@@ -459,6 +511,7 @@ let output_value_usage_dot usage_list out_channel =
   output_string out_channel "digraph {\n";
   List.iter
     (fun (name, count) ->
+      let name = escape_dot name in
       Printf.fprintf out_channel "  \"%s\" [label=\"%s\\ncount: %d\"]\n" name
         name count)
     usage_list;
@@ -470,7 +523,7 @@ let output_value_usage_json usage_list out_channel =
   List.iteri
     (fun i (name, count) ->
       Printf.fprintf out_channel "    { \"name\": \"%s\", \"count\": %d }%s\n"
-        name count
+        (escape_json name) count
         (if i = List.length usage_list - 1 then "" else ","))
     usage_list;
   output_string out_channel "  ]\n";

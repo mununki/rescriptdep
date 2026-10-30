@@ -36,7 +36,7 @@ let () =
   let results =
     [
       ( "rescript/lib/bs/src/app.ast",
-        [ "Belt"; "Comp0"; "Logger"; "Math"; "React" ] );
+        [ "Belt"; "Comp0"; "Logger"; "Math"; "React"; "Users" ] );
       ( "rescript12/basic/lib/bs/src/app.ast",
         [ "Belt"; "Comp0"; "Logger"; "MathUtil"; "React" ] );
       ("rescript12/namespaced/lib/bs/src/mathUtil.ast", [ "Belt"; "U"; "Utils" ]);

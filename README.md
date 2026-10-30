@@ -36,14 +36,20 @@ rescriptdep [options] files_or_dirs
 # -m, --module <name>         : Focus on specific module and its dependencies
 # -v, --verbose               : Enable verbose output
 # -b, --benchmark             : Enable performance benchmarking
-# --no-cache                  : Skip using cache
-# --clear-cache               : Clear the cache before analyzing
+# --no-cache                  : No effect, kept for compatibility (rescriptdep keeps no cache)
+# --clear-cache               : No effect, kept for compatibility
 # -nd, --no-dependents        : Find modules that have no dependents (not imported by any other modules)
 # -vb, --value-binding <name> : Count usage of a value binding (by name) across the project (in the module itself and all dependents; requires -m)
 # -vl, --value-line <line>    : Line number of the value binding (1-based, for disambiguation when multiple bindings have the same name; use with -vb)
 ```
 
 `files_or_dirs` are compiled `.cmt` files or directories that contain them, usually the project's `lib/bs`.
+
+Standard library and compiler-internal modules are left out of the graph, but a module that has its
+own `.cmt` file is always kept, even when its name matches one of them (for example `Format`).
+
+Only the DOT or JSON output goes to stdout. Warnings (for example an unreadable entry in `lib/bs`,
+which is skipped) and the `-v`/`-b` messages go to stderr.
 
 With `-vb`, each module reports its usage count, or a negative code when it could not be analyzed:
 `-2` no implementation, `-3` unreadable `.cmt` file, `-4` no `.cmt` file, `-5` no file path,

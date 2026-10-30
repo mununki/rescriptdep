@@ -3,6 +3,7 @@
 
 var $$Math = require("./math.bs.js");
 var Comp0 = require("./comp0.bs.js");
+var Users = require("./users.bs.js");
 var Logger = require("./logger.bs.js");
 var JsxRuntime = require("react/jsx-runtime");
 
@@ -17,6 +18,7 @@ var M = {
 function run() {
   var result = $$Math.square(5);
   Logger.log("Result: " + String(result));
+  Logger.log("Users: " + String(Users.count()));
   return JsxRuntime.jsx(App$M, {
               p: 10
             });

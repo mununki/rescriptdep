@@ -6,8 +6,6 @@ let format = ref Rescriptdep.Formatter.Dot
 let focus_module = ref None
 let verbose = ref false
 let benchmark = ref false
-let skip_cache = ref false
-let clear_cache = ref false
 let no_dependents = ref false
 let value_binding = ref None
 let value_line = ref None
@@ -50,10 +48,9 @@ let spec_list =
     ("--verbose", Arg.Set verbose, "Enable verbose output");
     ("-b", Arg.Set benchmark, "Enable performance benchmarking");
     ("--benchmark", Arg.Set benchmark, "Enable performance benchmarking");
-    ("--no-cache", Arg.Set skip_cache, "Skip using the in-memory cache");
-    ( "--clear-cache",
-      Arg.Set clear_cache,
-      "Clear the in-memory cache before analyzing" );
+    (* The CLI never caches; both flags are accepted for compatibility *)
+    ("--no-cache", Arg.Unit ignore, "No effect, kept for compatibility");
+    ("--clear-cache", Arg.Unit ignore, "No effect, kept for compatibility");
     ( "--no-dependents",
       Arg.Set no_dependents,
       "Output modules with no dependents" );
@@ -103,21 +100,12 @@ let main () =
 
     time_checkpoint "Start";
 
-    (* Clear in-memory cache if requested *)
-    if !clear_cache then (
-      if !verbose then Printf.eprintf "Clearing in-memory cache\n";
-      Rescriptdep.Parser.clear_cache ());
-
-    (* Parse files and directories to get module infos *)
+    (* Parse files and directories to get module infos. Each file is read
+       once per process, so the in-memory cache could never hit and its
+       cross-domain mutex only cost time: always skip it. *)
     let module_infos =
-      if !skip_cache then (
-        if !verbose then Printf.eprintf "Skipping in-memory cache usage\n";
-        Rescriptdep.Parser.clear_cache ();
-        Rescriptdep.Parser.parse_files_or_dirs ~verbose:!verbose
-          ~skip_cache:true !input_files)
-      else
-        Rescriptdep.Parser.parse_files_or_dirs ~verbose:!verbose
-          ~skip_cache:false !input_files
+      Rescriptdep.Parser.parse_files_or_dirs ~verbose:!verbose ~skip_cache:true
+        !input_files
     in
 
     time_checkpoint "Parsing completed";

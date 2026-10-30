@@ -43,12 +43,18 @@ let remove_dependent dependents dependency module_name =
       else StringMap.add dependency updated dependents
 
 let build_dependents dependencies =
-  StringMap.fold
-    (fun module_name deps dependents ->
-      List.fold_left
-        (fun acc dep -> add_dependent acc dep module_name)
-        dependents deps)
-    dependencies StringMap.empty
+  (* Each (module, dependency) pair is unique because dependency lists are
+     deduplicated, so no membership test is needed while collecting. *)
+  let tbl = Hashtbl.create (StringMap.cardinal dependencies) in
+  StringMap.iter
+    (fun module_name deps ->
+      List.iter
+        (fun dep ->
+          let current = try Hashtbl.find tbl dep with Not_found -> [] in
+          Hashtbl.replace tbl dep (module_name :: current))
+        deps)
+    dependencies;
+  Hashtbl.fold (fun dep ms acc -> StringMap.add dep ms acc) tbl StringMap.empty
 
 let make dependencies metadata =
   { dependencies; dependents = build_dependents dependencies; metadata }
@@ -91,11 +97,20 @@ let get_module_path graph module_name =
 
 (* Build a graph from a list of module_info structures *)
 let build_from_module_infos infos =
-  List.fold_left
-    (fun graph info ->
-      add ?cmt_path:info.Parser.cmt_path graph info.Parser.name
-        info.Parser.dependencies info.Parser.file_path)
-    empty infos
+  (* Later infos replace earlier ones with the same name, as [add] does *)
+  let dependencies, metadata =
+    List.fold_left
+      (fun (deps, meta) info ->
+        ( StringMap.add info.Parser.name
+            (List.sort_uniq String.compare info.Parser.dependencies)
+            deps,
+          StringMap.add info.Parser.name
+            { path = info.Parser.file_path; cmt_path = info.Parser.cmt_path }
+            meta ))
+      (StringMap.empty, StringMap.empty)
+      infos
+  in
+  make dependencies metadata
 
 (* Get the dependencies of a module *)
 let get_dependencies graph module_name =
@@ -316,10 +331,13 @@ let create_filtered_graph graph =
   (* Get all modules from the graph *)
   let all_modules = get_modules graph in
 
-  (* Filter out standard modules from the graph nodes *)
+  (* Filter out standard modules from the graph nodes. A module read from its
+     own CMT file belongs to the project and is kept whatever its name. *)
   let project_modules =
     List.filter
-      (fun m -> not (Parse_utils.is_stdlib_or_internal_module m))
+      (fun m ->
+        (not (Parse_utils.is_stdlib_or_internal_module m))
+        || (get_module_metadata graph m).cmt_path <> None)
       all_modules
   in
 

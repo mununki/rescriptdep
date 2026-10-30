@@ -28,8 +28,12 @@ dune exec test/test_cmt_values.exe   # Test value dependency information
 dune exec test/test_cmt_imports.exe  # Test import information
 dune exec test/test_ast.exe          # Test reading module references from .ast files
 dune exec test/test_rescriptdep.exe  # Test dependency analysis on sample projects
+dune exec test/test_output_formats.exe  # Test DOT/JSON/-nd/-vb output against golden files
 dune exec test/test_value_usage.exe  # Test value usage counts (-vb) on sample projects
+dune exec test/test_scan_robustness.exe  # Test that an unreadable lib/bs entry is skipped on its own
 dune exec test/test_namespace.exe    # Test namespace handling (self-contained)
+dune exec test/test_compilers.exe    # Test compiler identification (self-contained)
+dune exec test/test_formatter_escape.exe  # Test escaping in the DOT and JSON writers (self-contained)
 ```
 
 ### Test Structure
@@ -39,10 +43,16 @@ The test code is located in the `test/` directory and includes:
 - `test_cmt_imports.ml`: Tests the import information from cmt files
 - `test_cmt_values.ml`: Tests the value dependency information from cmt files
 - `test_ast.ml`: Tests reading module references from compiler-generated .ast files
-- `test_rescriptdep.ml`: Tests the dependency analysis on sample ReScript projects
-- `test_value_usage.ml`: Tests value usage counts on ReScript 11 and 12 projects
+- `test_rescriptdep.ml`: Tests the dependency analysis (JSON output) on sample ReScript projects
+- `test_output_formats.ml`: Compares the CLI's DOT graph, focused graph (`-m`), modules without
+  dependents (`-nd`) and value usage (`-vb`) output with golden files, and checks that `-vb`
+  reports `-6` for a compiler version it does not support
+- `test_value_usage.ml`: Tests value usage counts on ReScript 11, 12 and 13 projects
+- `test_scan_robustness.ml`: Tests that a dangling symlink in `lib/bs` skips only that entry
 - `test_namespace.ml`: Tests namespace handling without compiled fixtures
 - `test_compilers.ml`: Tests compiler identification and typed tree decoder guards without compiled fixtures
+- `test_formatter_escape.ml`: Tests that paths with `"` and `\` give valid DOT and JSON, without compiled fixtures
+- `test_support.ml`: Shared helpers (fixture lookup, path normalization, fixture comparison)
 - `benchmark.ml`: Performance benchmark for the parser
 
 ### Test Fixtures
@@ -57,14 +67,19 @@ The dependency analysis tests use JSON fixtures to ensure consistent behavior:
 - `test/fixtures/rescript12_basic.json`: Reference output for the ReScript 12 test project
 - `test/fixtures/rescript12_namespaced.json`: Reference output for the namespaced ReScript 12 test project
 - `test/fixtures/rescript13_basic.json`, `test/fixtures/rescript13_namespaced.json`: The same for ReScript 13
+- `test/fixtures/<project>.dot`, `<project>_focus.dot`, `<project>_focus.json`, `<project>_nd.dot`,
+  `<project>_nd.json`, `<project>_vb.json`: Golden output of `test_output_formats.ml` for the same
+  five projects
 
-These fixtures are automatically generated on first run and serve as reference points for future test runs. If the dependency analysis output differs from these fixtures, the test will fail and show a diff of the changes.
+These checked-in fixtures serve as reference points for future test runs. Missing references fail the tests; create or update them only with `RESCRIPTDEP_UPDATE_FIXTURES=1` as described below. Absolute paths are compared as repository-relative `test/...` paths. If the output differs from these fixtures, the test will fail and show a diff of the changes.
 
 #### Test Projects
 
 The test directory contains sample ReScript projects used for testing the dependency analyzer:
 
-- `test/rescript/`: Sample ReScript 11 project with standard ReScript setup
+- `test/rescript/`: Sample ReScript 11 project with standard ReScript setup. Its `users.res`
+  shares its name with an entry the standard library filter used to have, and checks that a
+  module with its own `.cmt` file is never filtered out.
 - `test/rescript12/`: pnpm workspace with ReScript 12 projects built from the same sources:
   `basic/` (standard setup) and `namespaced/` (`"namespace": true`). `math.res` is
   named `mathUtil.res` there because ReScript 12 resolves `Math` to `Stdlib.Math`.
@@ -86,11 +101,13 @@ These projects are analyzed during tests to generate dependency information whic
 
 When making changes that affect dependency analysis:
 
-1. Review the test output diff carefully to ensure changes are expected
-2. If the changes are intentional:
-   - Delete the existing fixture file, e.g. `rm test/fixtures/rescript.json`
-   - Run the tests again to generate new fixtures: `dune exec test/test_rescriptdep.exe`
-   - Commit both the code changes and the updated fixtures
+1. Run the tests and review output differences. Missing reference files fail the tests.
+2. If the changes are intentional, explicitly regenerate the references:
+   `RESCRIPTDEP_UPDATE_FIXTURES=1 dune exec test/test_rescriptdep.exe`
+   (or `RESCRIPTDEP_UPDATE_FIXTURES=1 dune exec test/test_output_formats.exe`
+   for the golden files). This creates missing files and overwrites existing references.
+3. Review the resulting fixture diff, rerun tests without the environment variable,
+   and commit both the code changes and every new or updated fixture.
 
 ### Supporting a New ReScript Release
 
@@ -115,8 +132,8 @@ To add a release:
    counts, and add an entry to `all` in `lib/compilers.ml`. `test/test_compilers.ml` checks that
    the counts match the vendored definitions.
 3. Add a fixture workspace (`test/rescriptNN/`) or update the existing one, its reference JSON
-   fixtures, and the project to `test/test_rescriptdep.ml`, `test/test_value_usage.ml` and the
-   `Makefile`.
+   fixtures and golden files, and the project to `test/test_rescriptdep.ml`,
+   `test/test_output_formats.ml`, `test/test_value_usage.ml` and the `Makefile`.
 
 ### Running the Benchmark
 

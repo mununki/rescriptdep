@@ -27,6 +27,9 @@ run-ocaml-tests:
 	dune exec ./test/test_cmt_values.exe
 	dune exec ./test/test_ast.exe
 	dune exec ./test/test_rescriptdep.exe
+	dune exec ./test/test_output_formats.exe
 	dune exec ./test/test_value_usage.exe
+	dune exec ./test/test_scan_robustness.exe
 	dune exec ./test/test_namespace.exe
 	dune exec ./test/test_compilers.exe
+	dune exec ./test/test_formatter_escape.exe

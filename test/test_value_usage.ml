@@ -70,6 +70,10 @@ let test_project ?(extra_cases = []) project ~math_module =
         false))
     cases
 
+(* users.res is named like an entry of the old standard library deny list,
+   which hid the module and every use of it *)
+let rescript11_cases = [ ("Users", "count", 3, [ ("App", 1); ("Users", 0) ]) ]
+
 (* loops.res uses step inside for...of, an optional parameter default, a
    template literal, an object literal and an object field access *)
 let rescript13_cases = [ ("Loops", "step", 1, [ ("Loops", 5) ]) ]
@@ -77,7 +81,7 @@ let rescript13_cases = [ ("Loops", "step", 1, [ ("Loops", 5) ]) ]
 let () =
   let results =
     [
-      ("rescript", "Math", []);
+      ("rescript", "Math", rescript11_cases);
       ("rescript12/basic", "MathUtil", []);
       ("rescript12/namespaced", "MathUtil", []);
       ("rescript13/basic", "MathUtil", rescript13_cases);

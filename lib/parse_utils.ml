@@ -75,24 +75,25 @@ let find_implementation_file_by_name ?(verbose = false) module_name
   in
 
   if verbose then
-    Printf.printf "Searching for module %s in %d paths\n" module_name
+    Printf.eprintf "Searching for module %s in %d paths\n" module_name
       (List.length candidates);
 
   (* Return the first existing file *)
   try
     let found = List.find Sys.file_exists candidates in
     if verbose then
-      Printf.printf "Found implementation for %s: %s\n" module_name found;
+      Printf.eprintf "Found implementation for %s: %s\n" module_name found;
     Some found
   with Not_found ->
     if verbose then
-      Printf.printf "No implementation file found for %s\n" module_name;
+      Printf.eprintf "No implementation file found for %s\n" module_name;
     None
 
 (* Check if a module is part of the standard library or internal modules *)
-let is_stdlib_or_internal_module name =
-  let name = normalize_module_name name in
-  let stdlib_modules =
+let stdlib_modules_lc =
+  let tbl = Hashtbl.create 128 in
+  List.iter
+    (fun m -> Hashtbl.replace tbl (String.lowercase_ascii m) ())
     [
       (* ReScript standard library modules *)
       "Js";
@@ -150,14 +151,6 @@ let is_stdlib_or_internal_module name =
       "Caml1999I022";
       "Has_arity1";
       "Has_arity2";
-      "DA";
-      "GitHub";
-      "Users";
-      "TH";
-      "BZ";
-      "BZf";
-      "Bgk";
-      "Bgq";
       (* JSX related modules *)
       "JsxC";
       "JsxDOMC";
@@ -186,18 +179,16 @@ let is_stdlib_or_internal_module name =
       "Js_null";
       "Js_undefined";
       "Js_null_undefined";
-    ]
-  in
+    ];
+  tbl
 
-  (* Check by exact name or common prefixes *)
-  List.exists
-    (fun m -> String.lowercase_ascii name = String.lowercase_ascii m)
-    stdlib_modules
+let is_stdlib_or_internal_module name =
+  let name = normalize_module_name name in
+  Hashtbl.mem stdlib_modules_lc (String.lowercase_ascii name)
   || String.starts_with ~prefix:"Caml" name
   || String.starts_with ~prefix:"Js_" name
   || String.starts_with ~prefix:"Belt_" name
   || String.starts_with ~prefix:"Jsx" name
-  (* ReScript 12 runtime modules *)
   || String.starts_with ~prefix:"Stdlib_" name
   || String.starts_with ~prefix:"Primitive_" name
 
@@ -228,20 +219,20 @@ let is_valid_module_name str =
 
 (* Find external module path in node_modules directory *)
 let find_external_module_path ?(verbose = false) module_name project_root =
-  if verbose then Printf.printf "Looking for external module: %s\n" module_name;
+  if verbose then Printf.eprintf "Looking for external module: %s\n" module_name;
 
   (* Verify if path exists and is a directory - no symlink resolution *)
   let verify_path path = Sys.file_exists path && Sys.is_directory path in
 
   (* Read dependency packages from bsconfig.json or rescript.json using Yojson *)
   let read_bs_dependencies config_path =
-    if verbose then Printf.printf "Reading dependencies from: %s\n" config_path;
+    if verbose then Printf.eprintf "Reading dependencies from: %s\n" config_path;
     if Sys.file_exists config_path then (
       try
         (* Use Yojson to parse the JSON file *)
         let json = Yojson.Basic.from_file config_path in
         if verbose then
-          Printf.printf "Successfully parsed JSON from %s\n" config_path;
+          Printf.eprintf "Successfully parsed JSON from %s\n" config_path;
 
         (* Helper function to safely extract string array from JSON *)
         let get_string_array json_obj field_name =
@@ -271,12 +262,13 @@ let find_external_module_path ?(verbose = false) module_name project_root =
         in
 
         if verbose then
-          Printf.printf "Found dependencies: %s\n" (String.concat ", " all_deps);
+          Printf.eprintf "Found dependencies: %s\n"
+            (String.concat ", " all_deps);
 
         all_deps
       with e ->
         if verbose then
-          Printf.printf "Error parsing %s: %s\n" config_path
+          Printf.eprintf "Error parsing %s: %s\n" config_path
             (Printexc.to_string e);
         [])
     else []
@@ -288,10 +280,10 @@ let find_external_module_path ?(verbose = false) module_name project_root =
     let rescript = Filename.concat dir "rescript.json" in
 
     if Sys.file_exists bsconfig then (
-      if verbose then Printf.printf "Found bsconfig.json at %s\n" bsconfig;
+      if verbose then Printf.eprintf "Found bsconfig.json at %s\n" bsconfig;
       Some (bsconfig, dir))
     else if Sys.file_exists rescript then (
-      if verbose then Printf.printf "Found rescript.json at %s\n" rescript;
+      if verbose then Printf.eprintf "Found rescript.json at %s\n" rescript;
       Some (rescript, dir))
     else
       let parent = Filename.dirname dir in
@@ -313,7 +305,7 @@ let find_external_module_path ?(verbose = false) module_name project_root =
   (* Find module in specific package *)
   let find_module_in_package package_path module_name =
     if verbose then
-      Printf.printf "Looking for module %s in package: %s\n" module_name
+      Printf.eprintf "Looking for module %s in package: %s\n" module_name
         package_path;
 
     (* Look for common source directories in the package *)
@@ -329,7 +321,7 @@ let find_external_module_path ?(verbose = false) module_name project_root =
     let rec check_dirs = function
       | [] -> None
       | dir :: rest ->
-          if verbose then Printf.printf "  Checking directory: %s\n" dir;
+          if verbose then Printf.eprintf "  Checking directory: %s\n" dir;
           if Sys.file_exists dir && Sys.is_directory dir then (
             try
               (* Look for files defining the module *)
@@ -354,7 +346,7 @@ let find_external_module_path ?(verbose = false) module_name project_root =
               let matching_files = List.filter matches_module files in
 
               if verbose && matching_files <> [] then
-                Printf.printf "  Found matching files: %s\n"
+                Printf.eprintf "  Found matching files: %s\n"
                   (String.concat ", " matching_files);
 
               match matching_files with
@@ -372,7 +364,7 @@ let find_external_module_path ?(verbose = false) module_name project_root =
                   in
 
                   if verbose && subdirs <> [] then
-                    Printf.printf "  Found matching subdirectories: %s\n"
+                    Printf.eprintf "  Found matching subdirectories: %s\n"
                       (String.concat ", " subdirs);
 
                   match subdirs with
@@ -381,7 +373,7 @@ let find_external_module_path ?(verbose = false) module_name project_root =
               | _ :: _ -> Some dir (* Found files defining this module *)
             with e ->
               if verbose then
-                Printf.printf "  Error checking directory %s: %s\n" dir
+                Printf.eprintf "  Error checking directory %s: %s\n" dir
                   (Printexc.to_string e);
               check_dirs rest)
           else check_dirs rest
@@ -393,41 +385,41 @@ let find_external_module_path ?(verbose = false) module_name project_root =
   (* Main function logic *)
   match find_config_file project_root with
   | None ->
-      if verbose then Printf.printf "No bsconfig.json or rescript.json found\n";
+      if verbose then Printf.eprintf "No bsconfig.json or rescript.json found\n";
       None
   | Some (config_path, config_dir) -> (
       (* Only use dependencies declared in bsconfig.json/rescript.json *)
       let dependencies = read_bs_dependencies config_path in
 
       if verbose then
-        Printf.printf "Dependencies from config: %s\n"
+        Printf.eprintf "Dependencies from config: %s\n"
           (String.concat ", " dependencies);
 
       (* Find the node_modules directory *)
       match find_node_modules config_dir with
       | None ->
-          if verbose then Printf.printf "No node_modules directory found\n";
+          if verbose then Printf.eprintf "No node_modules directory found\n";
           None
       | Some node_modules ->
           if verbose then
-            Printf.printf "Found node_modules at %s\n" node_modules;
+            Printf.eprintf "Found node_modules at %s\n" node_modules;
 
           (* Try each dependency to find the module *)
           let rec try_dependencies = function
             | [] ->
                 if verbose then
-                  Printf.printf "Module %s not found in any dependency\n"
+                  Printf.eprintf "Module %s not found in any dependency\n"
                     module_name;
                 None
             | dep :: rest ->
                 let package_path = Filename.concat node_modules dep in
 
                 if verify_path package_path then (
-                  if verbose then Printf.printf "Checking package: %s\n" dep;
+                  if verbose then Printf.eprintf "Checking package: %s\n" dep;
                   match find_module_in_package package_path module_name with
                   | Some dir ->
                       if verbose then
-                        Printf.printf "Found module %s in package %s at %s\n"
+                        Printf.eprintf "Found module %s in package %s at %s\n"
                           module_name dep dir;
                       Some dir
                   | None ->
@@ -443,14 +435,14 @@ let find_external_module_path ?(verbose = false) module_name project_root =
 
                             if verify_path full_path then (
                               if verbose then
-                                Printf.printf "Checking scoped package: %s/%s\n"
-                                  scope pkg;
+                                Printf.eprintf
+                                  "Checking scoped package: %s/%s\n" scope pkg;
                               match
                                 find_module_in_package full_path module_name
                               with
                               | Some dir ->
                                   if verbose then
-                                    Printf.printf
+                                    Printf.eprintf
                                       "Found module %s in scoped package %s at \
                                        %s\n"
                                       module_name dep dir;

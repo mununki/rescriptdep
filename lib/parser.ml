@@ -33,13 +33,14 @@ module Cache = struct
   (* Initialize the cache - simplified to just return false as we don't load from disk anymore *)
   let initialize ?(verbose = false) () =
     if verbose then
-      Printf.printf "File-based caching is disabled, using only memory cache\n";
+      Printf.eprintf "File-based caching is disabled, using only memory cache\n";
     false
 
   (* Save the cache - simplified to just return false as we don't save to disk anymore *)
   let save ?(verbose = false) () =
     if verbose then
-      Printf.printf "File-based caching is disabled, not saving cache to disk\n";
+      Printf.eprintf
+        "File-based caching is disabled, not saving cache to disk\n";
     false
 
   (* Add or update an entry in the cache *)
@@ -115,7 +116,8 @@ module Cache = struct
     (* Always return None if skip_cache is set *)
     if skip_cache then (
       if verbose then
-        Printf.printf "Skip cache flag is set, forcing cache miss for %s\n" path;
+        Printf.eprintf "Skip cache flag is set, forcing cache miss for %s\n"
+          path;
       None)
     else
       try
@@ -123,7 +125,7 @@ module Cache = struct
         let result =
           match Hashtbl.find_opt cache_table path with
           | None ->
-              if verbose then Printf.printf "Cache miss for %s\n" path;
+              if verbose then Printf.eprintf "Cache miss for %s\n" path;
               None
           | Some entry ->
               (* Check if the digests match *)
@@ -147,11 +149,11 @@ module Cache = struct
               in
 
               if interface_match && implementation_match then (
-                if verbose then Printf.printf "Cache hit for %s\n" path;
+                if verbose then Printf.eprintf "Cache hit for %s\n" path;
                 Some entry.module_info)
               else (
                 if verbose then
-                  Printf.printf "Cache invalid for %s (digest mismatch)\n" path;
+                  Printf.eprintf "Cache invalid for %s (digest mismatch)\n" path;
                 None)
         in
         Eio.Mutex.unlock cache_table_mutex;
@@ -200,41 +202,40 @@ let is_namespace_map_cmt path =
 let is_module_cmt path =
   Filename.check_suffix path ".cmt" && not (is_namespace_map_cmt path)
 
-(* Recursively scan directories for .cmt files *)
+(* Paths inside the ___incremental build directory, which is never scanned.
+   The regexp is compiled once instead of on every check. *)
+let incremental_path_regexp = Str.regexp ".*___incremental.*"
+
+let is_incremental_path path =
+  String.contains path '/' && Str.string_match incremental_path_regexp path 0
+
+(* Recursively scan directories for .cmt files. An entry that cannot be
+   inspected (e.g. a dangling symlink) is skipped on its own, so the rest of
+   its directory is still scanned. *)
 let rec scan_directory_recursive dir =
-  try
-    (* Skip ___incremental directory *)
-    if
-      String.contains dir '/'
-      && Str.string_match (Str.regexp ".*___incremental.*") dir 0
-    then (
-      if false then (* Set to true for verbose debugging *)
-        Printf.printf "Skipping incremental directory: %s\n" dir;
-      [])
-    else
-      let files = Sys.readdir dir in
-      let cmt_files = ref [] in
-
-      Array.iter
-        (fun file ->
-          let path = Filename.concat dir file in
-          if Sys.is_directory path then (
-            if
-              (* Skip ___incremental directory *)
-              file <> "___incremental"
-            then
-              (* Recursively scan subdirectory *)
-              cmt_files :=
-                List.append (scan_directory_recursive path) !cmt_files)
-          else if is_module_cmt path then
-            (* Add cmt file *)
-            cmt_files := path :: !cmt_files)
-        files;
-
-      !cmt_files
-  with Sys_error _ ->
-    Printf.printf "Warning: Could not read directory %s\n" dir;
-    []
+  if is_incremental_path dir then []
+  else
+    match Sys.readdir dir with
+    | exception Sys_error msg ->
+        (* [msg] starts with the path *)
+        Printf.eprintf "Warning: Could not read directory %s\n" msg;
+        []
+    | files ->
+        Array.fold_left
+          (fun cmt_files file ->
+            let path = Filename.concat dir file in
+            match Sys.is_directory path with
+            | exception Sys_error msg ->
+                Printf.eprintf "Warning: Skipping unreadable entry %s\n" msg;
+                cmt_files
+            | true ->
+                (* Skip ___incremental directory *)
+                if file <> "___incremental" then
+                  List.append (scan_directory_recursive path) cmt_files
+                else cmt_files
+            | false ->
+                if is_module_cmt path then path :: cmt_files else cmt_files)
+          [] files
 
 (* Use recursive directory scanning *)
 let scan_directory = scan_directory_recursive
@@ -271,10 +272,10 @@ module DependencyExtractor = struct
     (* Check if AST data is already cached *)
     match Cache.get_ast_data ~verbose ast_path with
     | Some data when not skip_cache ->
-        if verbose then Printf.printf "Using cached AST data for %s\n" ast_path;
+        if verbose then Printf.eprintf "Using cached AST data for %s\n" ast_path;
         Some data
     | _ -> (
-        if verbose then Printf.printf "Reading AST file: %s\n" ast_path;
+        if verbose then Printf.eprintf "Reading AST file: %s\n" ast_path;
         if not (Sys.file_exists ast_path) then None
         else
           try
@@ -295,17 +296,15 @@ module DependencyExtractor = struct
                   Some modules)
           with e ->
             if verbose then
-              Printf.printf "Error reading AST file %s: %s\n" ast_path
+              Printf.eprintf "Error reading AST file %s: %s\n" ast_path
                 (Printexc.to_string e);
             None)
 
   (* Get the CMT file path for a source file based on cmt file patterns *)
   let get_cmt_path_for_source source_file =
     (* Skip ___incremental directory *)
-    if
-      String.contains source_file '/'
-      && Str.string_match (Str.regexp ".*___incremental.*") source_file 0
-    then source_file ^ ".cmt" (* Return a non-existing path *)
+    if is_incremental_path source_file then source_file ^ ".cmt"
+      (* Return a non-existing path *)
     else
       (* Try direct replacement of extension first *)
       let base_path = Filename.remove_extension source_file in
@@ -329,14 +328,8 @@ module DependencyExtractor = struct
               "src"
           in
           let cmt_file = Filename.concat bs_path (file_path ^ ".cmt") in
-          if
-            Sys.file_exists cmt_file
-            && not
-                 (String.contains cmt_file '/'
-                 && Str.string_match
-                      (Str.regexp ".*___incremental.*")
-                      cmt_file 0)
-          then cmt_file
+          if Sys.file_exists cmt_file && not (is_incremental_path cmt_file) then
+            cmt_file
           else direct_cmt (* Fallback to direct replacement *)
         else direct_cmt (* Fallback to direct replacement *)
 
@@ -350,7 +343,7 @@ module DependencyExtractor = struct
     match Cache.get_ast_dependency_result ~verbose cache_key with
     | Some result when not skip_cache ->
         if verbose then
-          Printf.printf
+          Printf.eprintf
             "Using cached dependency check result for %s in %s: %b\n"
             module_name source_file result;
         result
@@ -359,11 +352,11 @@ module DependencyExtractor = struct
         let cmt_path = get_cmt_path_for_source source_file in
         let ast_path = get_ast_path cmt_path in
 
-        if verbose then Printf.printf "Looking for AST file at: %s\n" ast_path;
+        if verbose then Printf.eprintf "Looking for AST file at: %s\n" ast_path;
 
         if not (Sys.file_exists ast_path) then (
           if verbose then
-            Printf.printf
+            Printf.eprintf
               "AST file not found at %s, conservatively returning true\n"
               ast_path;
 
@@ -372,7 +365,7 @@ module DependencyExtractor = struct
           true)
         else (
           if verbose then
-            Printf.printf "Checking module %s usage in AST file: %s\n"
+            Printf.eprintf "Checking module %s usage in AST file: %s\n"
               module_name ast_path;
 
           (* Get the module list from the AST file *)
@@ -395,7 +388,7 @@ module DependencyExtractor = struct
             result;
 
           if verbose then
-            Printf.printf "Module %s %s in AST file %s\n" module_name
+            Printf.eprintf "Module %s %s in AST file %s\n" module_name
               (if result then "found" else "not found")
               ast_path;
 
@@ -411,12 +404,12 @@ module DependencyExtractor = struct
       | None -> get_ast_path (get_cmt_path_for_source source_file)
     in
 
-    if verbose then Printf.printf "Looking for AST file at: %s\n" ast_path;
+    if verbose then Printf.eprintf "Looking for AST file at: %s\n" ast_path;
 
     match read_ast_file ~verbose ~skip_cache ast_path with
     | None ->
         if verbose then
-          Printf.printf
+          Printf.eprintf
             "AST file not found or unreadable at %s, conservatively returning \
              all modules\n"
             ast_path;
@@ -432,7 +425,7 @@ module DependencyExtractor = struct
         modules (* Return all modules if the AST header is unavailable *)
     | Some ast_modules ->
         if verbose then
-          Printf.printf "Batch checking %d modules in AST file: %s\n"
+          Printf.eprintf "Batch checking %d modules in AST file: %s\n"
             (List.length modules) ast_path;
 
         (* Convert ast_modules to a set for O(1) lookups instead of O(n) with List.mem *)
@@ -480,13 +473,13 @@ module DependencyExtractor = struct
 
           (* If we timed out, conservatively return all modules *)
           if !timed_out then (
-            if verbose then Printf.printf "Timed out, returning all modules\n";
+            if verbose then Printf.eprintf "Timed out, returning all modules\n";
             modules)
           else List.rev !filtered
         in
 
         if verbose then
-          Printf.printf "Filtered %d out of %d modules in AST file\n"
+          Printf.eprintf "Filtered %d out of %d modules in AST file\n"
             (List.length results) (List.length modules);
 
         results
@@ -537,22 +530,26 @@ module DependencyExtractor = struct
 
         if is_used then
           if verbose then
-            Printf.printf "Module %s is actually used in %s\n" module_name
+            Printf.eprintf "Module %s is actually used in %s\n" module_name
               source_file
           else if verbose then
-            Printf.printf "Module %s is not used in source %s\n" module_name
+            Printf.eprintf "Module %s is not used in source %s\n" module_name
               source_file;
 
         is_used
       with _ ->
         if verbose then
-          Printf.printf "Error reading source file %s\n" source_file;
+          Printf.eprintf "Error reading source file %s\n" source_file;
         true (* In case of file reading failure, conservatively return true *)
 
   (* Extract dependencies from cmt_info structure. [cmt_path] is the file the
-     info was read from; the AST file next to it filters the imports. *)
+     info was read from; the AST file next to it filters the imports.
+     [is_project_module] tells which imports are modules of the scanned
+     project; those are kept even when their name matches a standard library
+     module. *)
   let extract_dependencies_from_cmt_info ?(verbose = false)
-      ?(skip_cache = false) ?cmt_path cmt_info =
+      ?(skip_cache = false) ?(is_project_module = fun _ -> false) ?cmt_path
+      cmt_info =
     let deps = ref [] in
 
     (* Check source file path - directly use cmt_sourcefile *)
@@ -560,44 +557,56 @@ module DependencyExtractor = struct
       match cmt_info.Cmt_format.cmt_sourcefile with
       | Some path when Sys.file_exists path ->
           if verbose then
-            Printf.printf "Using cmt_sourcefile directly: %s\n" path;
+            Printf.eprintf "Using cmt_sourcefile directly: %s\n" path;
           path
       | Some _ | None ->
           if verbose then
-            Printf.printf "cmt_sourcefile not usable for %s\n"
+            Printf.eprintf "cmt_sourcefile not usable for %s\n"
               cmt_info.Cmt_format.cmt_modname;
           "" (* No valid source file available *)
     in
 
     if verbose then
-      Printf.printf "Using AST-based module dependency filtering for %s\n"
+      Printf.eprintf "Using AST-based module dependency filtering for %s\n"
         cmt_info.Cmt_format.cmt_modname;
 
-    (* Extract potential dependency modules first *)
-    let potential_deps = ref [] in
-    (try
-       List.iter
-         (fun (module_name, _) ->
-           if
-             is_valid_module_name module_name
-             && not (is_stdlib_or_internal_module module_name)
-           then potential_deps := module_name :: !potential_deps)
-         cmt_info.Cmt_format.cmt_imports
-     with _ -> ());
-
-    (* Filter the imports by the module references in the AST file *)
-    (match cmt_path with
-    | Some cmt_path ->
-        deps :=
-          batch_check_modules_usage ~verbose ~skip_cache
-            ~ast_path:(get_ast_path cmt_path) cmt_path !potential_deps
-    | None when source_file <> "" ->
-        deps :=
-          batch_check_modules_usage ~verbose ~skip_cache source_file
-            !potential_deps
+    let is_candidate module_name =
+      is_valid_module_name module_name
+      && not
+           (is_stdlib_or_internal_module module_name
+           && not (is_project_module module_name))
+    in
+    let ast_path =
+      match cmt_path with
+      | Some cmt_path -> Some (get_ast_path cmt_path)
+      | None when source_file <> "" ->
+          Some (get_ast_path (get_cmt_path_for_source source_file))
+      | None -> None
+    in
+    let header =
+      match ast_path with
+      | Some p -> read_ast_file ~verbose ~skip_cache p
+      | None -> None
+    in
+    (match header with
     | None ->
-        (* If no source file, include all potential dependencies *)
-        deps := !potential_deps);
+        deps :=
+          List.filter_map
+            (fun (m, _) -> if is_candidate m then Some m else None)
+            cmt_info.Cmt_format.cmt_imports
+    | Some header ->
+        let module StringSet = Set.Make (String) in
+        let header_set = StringSet.of_list header in
+        deps :=
+          List.filter_map
+            (fun (m, _) ->
+              if
+                (StringSet.mem m header_set
+                || StringSet.mem (normalize_module_name m) header_set)
+                && is_candidate m
+              then Some m
+              else None)
+            cmt_info.Cmt_format.cmt_imports);
 
     (* Return unique dependencies *)
     List.sort_uniq String.compare !deps
@@ -633,12 +642,12 @@ let find_implementation_file ?(verbose = false) cmt_path =
     try
       let found = List.find Sys.file_exists candidates in
       if verbose then
-        Printf.printf "Found source file with direct path conversion: %s\n"
+        Printf.eprintf "Found source file with direct path conversion: %s\n"
           found;
       Some found
     with Not_found ->
       if verbose then
-        Printf.printf
+        Printf.eprintf
           "Direct path conversion failed for %s, trying other methods\n"
           cmt_path;
 
@@ -708,7 +717,7 @@ let find_implementation_file ?(verbose = false) cmt_path =
       in
 
       if verbose then
-        List.iter (fun dir -> Printf.printf "  - %s\n" dir) unique_dirs;
+        List.iter (fun dir -> Printf.eprintf "  - %s\n" dir) unique_dirs;
 
       (* Use the utility function from Parse_utils to find the implementation file *)
       find_implementation_file_by_name ~verbose module_name unique_dirs)
@@ -746,18 +755,22 @@ let find_implementation_file ?(verbose = false) cmt_path =
     in
 
     if verbose then
-      List.iter (fun dir -> Printf.printf "  - %s\n" dir) unique_dirs;
+      List.iter (fun dir -> Printf.eprintf "  - %s\n" dir) unique_dirs;
 
     find_implementation_file_by_name ~verbose module_name unique_dirs
 
-(* Parse a cmt file and extract module information *)
-let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
-  let module_name =
-    Filename.basename path |> Filename.remove_extension |> normalize_module_name
-  in
+(* The module a CMT file describes, e.g. "app-MyNs.cmt" -> "App" *)
+let module_name_of_cmt path =
+  Filename.basename path |> Filename.remove_extension |> normalize_module_name
+
+(* Parse a cmt file and extract module information. [is_project_module] is
+   passed to [DependencyExtractor.extract_dependencies_from_cmt_info]. *)
+let parse_cmt_file ?(verbose = false) ?(skip_cache = false)
+    ?(is_project_module = fun _ -> false) path =
+  let module_name = module_name_of_cmt path in
 
   if verbose then
-    Printf.printf "Analyzing module: %s (file: %s)\n" module_name path;
+    Printf.eprintf "Analyzing module: %s (file: %s)\n" module_name path;
 
   try
     (* Check if file has a cached version with matching digests *)
@@ -766,7 +779,7 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
       with Cmt_format.Error msg ->
         (* Provide more detailed error information *)
         if verbose then
-          Printf.printf
+          Printf.eprintf
             "Warning: Problem with CMT file %s: %s (continuing anyway)\n" path
             msg;
 
@@ -795,16 +808,16 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
     with
     | Some cached_module_info ->
         if verbose then
-          Printf.printf "Using cached module info for %s\n" module_name;
+          Printf.eprintf "Using cached module info for %s\n" module_name;
         cached_module_info
     | None ->
         if verbose then
-          Printf.printf "Parsing module %s from scratch\n" module_name;
+          Printf.eprintf "Parsing module %s from scratch\n" module_name;
 
         (* Extract dependencies from cmt_info *)
         let dependencies =
           DependencyExtractor.extract_dependencies_from_cmt_info ~verbose
-            ~skip_cache ~cmt_path:path cmt_info
+            ~skip_cache ~is_project_module ~cmt_path:path cmt_info
         in
 
         (* Filter out self-references and normalize *)
@@ -812,7 +825,9 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
           dependencies
           |> List.filter (fun name ->
                  normalize_module_name name <> module_name
-                 && not (is_stdlib_or_internal_module name))
+                 && not
+                      (is_stdlib_or_internal_module name
+                      && not (is_project_module name)))
           |> List.map normalize_module_name
           |> List.sort_uniq compare
         in
@@ -824,8 +839,8 @@ let parse_cmt_file ?(verbose = false) ?(skip_cache = false) path =
               Some source_file
           | _ -> (
               if verbose then
-                Printf.printf "Using find_implementation_file fallback for %s\n"
-                  module_name;
+                Printf.eprintf
+                  "Using find_implementation_file fallback for %s\n" module_name;
               (* Fallback to the existing implementation if sourcefile doesn't exist *)
               let impl_file = find_implementation_file ~verbose path in
               match impl_file with Some file -> Some file | None -> Some path)
@@ -941,7 +956,7 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
       | [] -> ()
       | path :: rest ->
           if Sys.is_directory path then (
-            if verbose then Printf.printf "Scanning directory: %s\n" path;
+            if verbose then Printf.eprintf "Scanning directory: %s\n" path;
             let dir_cmt_files = scan_directory path in
             cmt_files := dir_cmt_files @ !cmt_files;
             collect rest)
@@ -954,32 +969,37 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
     !cmt_files
   in
 
-  (* First get the list of all project modules (recursively) *)
-  bench_checkpoint "Start collecting project modules";
-  let project_modules = get_project_modules paths in
-  bench_checkpoint
-    (Printf.sprintf "Collected %d project modules"
-       (List.length project_modules));
-
-  if verbose then
-    Printf.printf "Project modules: %s\n" (String.concat ", " project_modules);
-
   (* Collect all CMT files to process *)
   bench_checkpoint "Start collecting CMT files";
   let cmt_files = collect_cmt_files paths in
   bench_checkpoint
     (Printf.sprintf "Collected %d CMT files" (List.length cmt_files));
 
+  (* The project's modules are the ones with a CMT file. They are never
+     filtered out as standard library modules, e.g. a project's own Format or
+     Users module. The set is read-only, so the worker domains share it. *)
+  let is_project_module =
+    let module StringSet = Set.Make (String) in
+    let project_modules =
+      List.fold_left
+        (fun set file -> StringSet.add (module_name_of_cmt file) set)
+        StringSet.empty cmt_files
+    in
+    fun name -> StringSet.mem (normalize_module_name name) project_modules
+  in
+
   (* Process a single file *)
   let process_file file =
     try
-      if verbose then Printf.printf "Processing file: %s\n" file;
+      if verbose then Printf.eprintf "Processing file: %s\n" file;
 
-      let module_info = parse_cmt_file ~verbose ~skip_cache file in
+      let module_info =
+        parse_cmt_file ~verbose ~skip_cache ~is_project_module file
+      in
 
       Some module_info
     with Invalid_cmt_file msg ->
-      if verbose then Printf.printf "Invalid cmt file: %s - %s\n" file msg;
+      if verbose then Printf.eprintf "Invalid cmt file: %s - %s\n" file msg;
       None
   in
 
@@ -1008,7 +1028,7 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
       results)
     else (
       if verbose then
-        Printf.printf "Using Eio with %d workers for parallel processing\n"
+        Printf.eprintf "Using Eio with %d workers for parallel processing\n"
           num_domains;
 
       bench_checkpoint "Starting Eio parallel processing";
@@ -1021,7 +1041,7 @@ let parse_files_or_dirs ?(verbose = false) ?(skip_cache = false) paths =
       let chunks = chunk_list chunk_size cmt_files in
 
       if verbose then
-        Printf.printf "Split %d files into %d chunks of approx. size %d\n"
+        Printf.eprintf "Split %d files into %d chunks of approx. size %d\n"
           total_files (List.length chunks) chunk_size;
 
       (* Use Eio for parallel processing with optimizations *)

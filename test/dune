@@ -1,11 +1,12 @@
 (library
  (name test_support)
- (modules test_support))
+ (modules test_support)
+ (libraries str))
 
 (tests
- (names test_namespace test_compilers)
- (modules test_namespace test_compilers)
- (libraries rescriptdep))
+ (names test_namespace test_compilers test_formatter_escape)
+ (modules test_namespace test_compilers test_formatter_escape)
+ (libraries rescriptdep yojson))
 
 (executables
  (names
@@ -13,14 +14,18 @@
   test_cmt_imports
   test_cmt_values
   test_ast
-  test_value_usage)
+  test_value_usage
+  test_scan_robustness
+  test_output_formats)
  (modules
   test_rescriptdep
   test_cmt_imports
   test_cmt_values
   test_ast
-  test_value_usage)
- (libraries rescriptdep str test_support))
+  test_value_usage
+  test_scan_robustness
+  test_output_formats)
+ (libraries rescriptdep str unix test_support))
 
 (executable
  (name benchmark)

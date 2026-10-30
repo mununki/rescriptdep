@@ -1,0 +1,6 @@
+{
+  "modules": [
+    { "name": "Math", "count": 2 },
+    { "name": "Utils", "count": 4 }
+  ]
+}

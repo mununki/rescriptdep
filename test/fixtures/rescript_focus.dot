@@ -1,0 +1,11 @@
+digraph dependencies {
+  rankdir=LR;
+  node [shape=box, style=filled, fillcolor=lightblue];
+
+  "App" [label="App", tooltip="test/rescript/src/app.res"];
+  "Math" [label="Math", tooltip="test/rescript/src/math.res"];
+  "Utils" [label="Utils", tooltip="test/rescript/src/utils.res"];
+
+  "App" -> "Math";
+  "Math" -> "Utils";
+}
