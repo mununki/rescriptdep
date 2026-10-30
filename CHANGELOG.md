@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Reduced dependency analysis work with indexed graph traversal, memoized dependency lookups, and shared parsing work across output formats.
+- Rebuilt the VS Code graph viewer with local layout, search, tracing, Back navigation, accessible controls, context menus, and cancellable requests.
+- Plain wheel scrolling in the graph now pans; Ctrl/Cmd+wheel zooms.
+- CLI verbose diagnostics now go to stderr so stdout remains valid DOT or JSON.
+- `--no-cache` and `--clear-cache` remain accepted compatibility options and have no effect; the unused persistent cache was removed.
+
+### Fixed
+- Included modules referenced only in value expressions in dependency and usage analysis. Graph output may now include previously missing nodes and edges.
+- Escaped quotes and backslashes in DOT and JSON output.
+- Continued scanning readable entries when another directory entry cannot be read, reporting a warning on stderr.
+- Bounded extension caches and history, prevented stale requests and annotations, and improved graph error recovery and narrow-panel layouts.
+
+### Added
+- Golden output fixtures and regression coverage for escaping, scanning, graph navigation, and extension request lifecycles.
+
 ## [0.2.0] - 2026-10-21
 ### Added
 - Added regression coverage for dependency graph dependent-index updates

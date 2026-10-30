@@ -10,7 +10,7 @@ A Visual Studio Code extension for visualizing dependencies between ReScript mod
 
 - **Interactive Graph**: Click on modules to navigate through dependencies
 - **Value Usage Count**: See how many times each let binding is used, directly in the editor
-- **High Performance**: Uses digest-based caching to improve performance for large projects
+- **Responsive Graph Viewer**: Local Graphviz layout, module search, keyboard navigation, and cancellable analysis; no network connection required for rendering
 
 <div style="display: flex; justify-content: space-between;">
   <img src="https://github.com/mununki/rescriptdep/raw/main/vscode-rescriptdep/images/rescriptdep_screenshot_0.png" alt="ReScript Dependency Visualization" width="49%">
@@ -19,7 +19,7 @@ A Visual Studio Code extension for visualizing dependencies between ReScript mod
 
 ## Value Usage Count Annotation
 
-This extension also shows how many times each value (e.g., a function or let binding) is used across your project. When you place your cursor on a `let ... =` declaration in a `.res` file, an inline annotation will appear at the end of the line, such as `Used 0 times`. This helps you quickly identify unused or rarely used values.
+This extension also shows how many times each value (e.g., a function or let binding) is used across your project. When you place your cursor on a `let ... =` declaration in a `.res` file, an inline annotation will appear at the end of the line, such as `Used 0 times`. Partial results appear as `Used N+ times`; unavailable results are not shown. Save and compile your source to refresh analysis. This helps you quickly identify unused or rarely used values.
 
 <div align="center">
   <img src="https://github.com/mununki/rescriptdep/raw/main/vscode-rescriptdep/images/rescriptdep_screenshot_2.png" alt="Value Usage Count Annotation" width="60%">
@@ -60,11 +60,15 @@ This extension provides several commands in the Command Palette (`Ctrl+Shift+P` 
 ## Usage Tips
 
 1. **After Major Changes**: When making significant changes to your codebase (including module deletion), run `rescript clean` to recompile your project for improved analysis accuracy
-2. **Module Navigation**: Click on any module in the visualization to focus on that module
+2. **Module Navigation**: Click a module to focus its dependencies. Click the centre module, double-click, or Cmd/Ctrl+click to open its source. Use Back to return to earlier views. The editor-title button focuses the module in that editor.
+3. **Pan and Zoom**: Drag the canvas or use the mouse wheel to pan. **Wheel behavior has changed:** hold Ctrl/Cmd while scrolling to zoom around the pointer. Use +, −, or Fit in the toolbar for zoom controls.
+4. **Find and Keyboard Navigation**: Cmd/Ctrl+F opens module search. Enter cycles matches; Escape returns focus to the current match. Tab selects controls and modules; Enter or Space activates a module. Shift+F10 opens its context menu.
+5. **Context Menus**: Right-click a module to Open, Focus, Copy Module Name, or Copy Relative Path. Right-click the canvas to Fit to View, go Back, or Show Full Graph. Actions depend on the current view and source availability.
+6. **Large Graphs**: Use a focused view when the full graph is too large. Analysis and layout can be cancelled. Modules without dependents are candidates for review, not proof that deletion is safe.
 
 ## Extension Settings
 
-This extension doesn't require any specific settings.
+`bibimbob.valueUsageCount.enabled` (default: `true`) controls inline usage annotations. The **Bibimbob: Toggle Value Usage Count** command updates this setting.
 
 ## Known Issues
 
@@ -72,6 +76,15 @@ This extension doesn't require any specific settings.
 - Please report any issues on the GitHub repository
 
 ## Release Notes
+
+### Unreleased
+
+- Rebuilt the graph viewer with searchable module cards, dependency tracing, Back navigation, theme support, and local layout.
+- Added module and canvas context menus, keyboard navigation, and source-opening shortcuts.
+- Plain scrolling now pans; hold Ctrl/Cmd while scrolling to zoom.
+- Reused graph panels and cancelled superseded analysis; bounded navigation and usage caches.
+- Improved narrow-panel layout, unused-module grids, and actionable error states.
+- Refreshed the screenshots using a neutral demo project. The usage annotation image is an illustrative editor mockup.
 
 ### 0.9.0
 
