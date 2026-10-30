@@ -1,0 +1,292 @@
+/* Graph webview styles (bundled to dist/webview.css). Visual spec: designer-review3 R1 "R-B visual spec".
+ * Theme variants only change tokens on <body>; node and edge rules read the tokens. */
+
+:root {
+  --bd-bg: var(--vscode-editor-background);
+  --bd-fg: var(--vscode-editor-foreground);
+  --bd-muted: color-mix(in srgb, var(--vscode-editor-foreground) 60%, var(--vscode-editor-background));
+  --bd-card: color-mix(in srgb, var(--vscode-editor-foreground) 7%, var(--vscode-editor-background));
+  --bd-card-hover: color-mix(in srgb, var(--vscode-editor-foreground) 13%, var(--vscode-editor-background));
+  --bd-card-border: var(--vscode-contrastBorder, color-mix(in srgb, var(--vscode-editor-foreground) 24%, var(--vscode-editor-background)));
+  --bd-dependent: var(--vscode-charts-blue, #3794ff);
+  --bd-dependency: color-mix(in srgb, var(--vscode-charts-orange, #d18616) 80%, var(--vscode-editor-foreground));
+  --bd-center: var(--vscode-button-background);
+  --bd-center-fg: var(--vscode-button-foreground);
+  --bd-center-ring: var(--vscode-contrastActiveBorder, var(--vscode-button-background));
+  --bd-focus: var(--vscode-focusBorder);
+  --bd-sec: var(--vscode-descriptionForeground);
+  --bd-shadow: var(--vscode-widget-shadow, rgba(0, 0, 0, .3));
+  --bd-grid: color-mix(in srgb, var(--vscode-editor-foreground) 10%, transparent);
+  --bd-match: var(--vscode-editor-findMatchHighlightBackground, transparent);
+  --bd-cycle: var(--vscode-charts-red, #f14c4c);
+
+  /* Implementation tokens (theme variants below). */
+  --bd-center-filter: drop-shadow(0 2px 6px var(--bd-shadow));
+  --bd-ring-dash: none;
+  --bd-dim-nodes: .72;  /* nodes behind the spotlight end at .28 */
+  --bd-dim-edges: .64;  /* edges end at .36 × .28 ≈ .10 */
+  --bd-motion: .12s;
+}
+
+/* High contrast (dark and light): no tint, no grid, no shadow, dashed selection ring, lighter dimming. */
+body.vscode-high-contrast {
+  --bd-card: var(--bd-bg);
+  --bd-card-hover: var(--bd-bg);
+  --bd-center-filter: none;
+  --bd-ring-dash: 4 2;
+  --bd-dim-nodes: .5;   /* nodes at .5 */
+  --bd-dim-edges: .4;   /* edges at .6 × .5 = .3 */
+}
+
+body.vscode-reduce-motion { --bd-motion: 0s; }
+@media (prefers-reduced-motion: reduce) { :root { --bd-motion: 0s; } }
+
+html, body { height: 100%; }
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bd-bg);
+  color: var(--vscode-foreground, var(--bd-fg));
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- header */
+.hdr {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+}
+.hdr-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.hdr .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 60%; }
+.hdr .meta { color: var(--bd-sec); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+.find { position: relative; flex: 0 1 190px; min-width: 120px; }
+.find input {
+  font: inherit;
+  width: 100%;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 72px 0 6px;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  outline: none;
+}
+.find input::placeholder { color: var(--vscode-input-placeholderForeground); }
+.find input:focus { border-color: var(--vscode-focusBorder); }
+.find input:placeholder-shown { padding-right: 6px; }
+.find .count {
+  position: absolute;
+  right: 6px;
+  top: 0;
+  line-height: 24px;
+  font-size: 11px;
+  color: var(--bd-sec);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.find .count.none { color: var(--vscode-errorForeground); }
+
+.tb { display: flex; align-items: center; gap: 2px; flex: none; }
+.tb button {
+  font: inherit;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-icon-foreground, var(--bd-fg));
+  cursor: pointer;
+}
+.tb button.txt { padding: 0 6px; }
+.tb button:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground); }
+.tb button:active:not(:disabled) { background: var(--vscode-toolbar-activeBackground, var(--vscode-toolbar-hoverBackground)); }
+.tb button:disabled { opacity: .4; cursor: default; }
+.tb button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.tb .sep { width: 1px; height: 16px; margin: 0 4px; background: var(--vscode-panel-border, var(--bd-muted)); }
+body.vscode-high-contrast .tb button:hover:not(:disabled) { outline: 1px dashed var(--vscode-contrastActiveBorder); outline-offset: -1px; }
+
+/* ---------------------------------------------------------------- canvas */
+#graph-container {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  background-image: radial-gradient(var(--bd-grid) 1px, transparent 1.2px);
+  background-size: 18px 18px;
+}
+body.vscode-high-contrast #graph-container { background-image: none; }
+#graph-container:focus-visible { box-shadow: inset 0 0 0 1px var(--bd-focus); }
+#graph-container.dragging { cursor: grabbing; }
+
+#graph { position: absolute; inset: 0; }
+#graph.stale { opacity: .4; }
+.graph-svg { display: block; width: 100%; height: 100%; }
+.graph-svg text { font-family: inherit; }
+
+/* ---------------------------------------------------------------- cards */
+.node { cursor: pointer; outline: none; }
+.node .card {
+  fill: var(--bd-card);
+  stroke: var(--bd-card-border);
+  stroke-width: 1;
+  transition: fill var(--bd-motion), stroke var(--bd-motion);
+}
+.node.external .card { fill: transparent; stroke-dasharray: 3 2; }
+.node .name { fill: var(--bd-fg); font-size: 12px; font-weight: 500; }
+.node .sec { fill: color-mix(in srgb, var(--bd-sec) 85%, var(--bd-fg)); font-size: 10.5px; font-weight: 400; }
+.node:hover .card, .node.hovered .card { fill: var(--bd-card-hover); stroke: var(--bd-focus); }
+.node.match .card { fill: var(--bd-match); stroke: var(--bd-focus); stroke-width: 2; }
+.node.center .card { fill: var(--bd-center); stroke: var(--bd-center-ring); stroke-width: 2; filter: var(--bd-center-filter); }
+.node.center .name { fill: var(--bd-center-fg); font-weight: 600; }
+.node.center .sec { fill: var(--bd-center-fg); opacity: .8; }
+.node .ring { fill: none; stroke: none; pointer-events: none; }
+.node.selected .ring, .node.current .ring, .node:focus-visible .ring {
+  stroke: var(--bd-focus);
+  stroke-width: 2;
+  stroke-dasharray: var(--bd-ring-dash);
+}
+
+/* ---------------------------------------------------------------- edges */
+.edges, .clusters, .decor, .dim, .raised { pointer-events: none; }
+.edge > path { fill: none; stroke: var(--bd-muted); stroke-width: 1.15; marker-end: url(#bd-ah); }
+.edge.dependent-edge > path { stroke: var(--bd-dependent); stroke-width: 1.6; marker-end: url(#bd-ah-in); }
+.edge.dependency-edge > path { stroke: var(--bd-dependency); stroke-width: 1.6; marker-end: url(#bd-ah-out); }
+.edge.hl-in > path { stroke: var(--bd-dependent); stroke-width: 2; marker-end: url(#bd-ah-in); }
+.edge.hl-out > path { stroke: var(--bd-dependency); stroke-width: 2; marker-end: url(#bd-ah-out); }
+.marker-default > path { fill: var(--bd-muted); }
+.marker-in > path { fill: var(--bd-dependent); }
+.marker-out > path { fill: var(--bd-dependency); }
+
+/* ---------------------------------------------------------------- spotlight overlays (C13, highlight.ts) */
+.dim { fill: var(--bd-bg); }
+.dim-edges { opacity: var(--bd-dim-edges); }
+.dim-nodes { opacity: var(--bd-dim-nodes); }
+
+/* ---------------------------------------------------------------- decorations */
+.cluster > rect { fill: none; stroke: var(--bd-cycle); stroke-width: 1; stroke-dasharray: 4 3; }
+.cluster > text { fill: var(--bd-cycle); font-size: 11px; text-anchor: middle; }
+.colhdr { fill: var(--bd-sec); font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+.colhdr-swatch { stroke-width: 2; }
+.colhdr-swatch.in { stroke: var(--bd-dependent); }
+.colhdr-swatch.out { stroke: var(--bd-dependency); }
+.note { fill: var(--bd-sec); font-size: 12px; text-anchor: middle; }
+
+/* ---------------------------------------------------------------- states */
+.state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bd-bg);
+  user-select: text;
+  -webkit-user-select: text;
+}
+.state[hidden], .loading[hidden], .loading-hint[hidden], #loading-cancel[hidden] { display: none; }
+.state-box { max-width: 440px; padding: 16px 24px; text-align: center; }
+.state-title { font-weight: 600; margin-bottom: 6px; }
+.state[data-kind="error"] .state-title { color: var(--vscode-errorForeground, var(--bd-fg)); }
+.state-body { margin: 0 0 14px; color: var(--bd-sec); line-height: 1.4; }
+.state-actions { display: flex; gap: 8px; justify-content: center; }
+
+button.primary, button.secondary {
+  font: inherit;
+  padding: 4px 12px;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  cursor: pointer;
+  line-height: 18px;
+}
+button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+button.primary:hover { background: var(--vscode-button-hoverBackground, var(--vscode-button-background)); }
+button.secondary { background: var(--vscode-button-secondaryBackground, transparent); color: var(--vscode-button-secondaryForeground, var(--bd-fg)); }
+button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-secondaryBackground, transparent)); }
+button.primary:focus-visible, button.secondary:focus-visible, button.link:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+button.link {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--vscode-textLink-foreground);
+  cursor: pointer;
+}
+button.link:hover { color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground)); text-decoration: underline; }
+
+.loading { position: absolute; inset: 0; pointer-events: none; }
+.loading-bar { position: absolute; top: 0; left: 0; right: 0; height: 2px; overflow: hidden; }
+.loading-bar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 30%;
+  background: var(--vscode-progressBar-background);
+  animation: bd-indeterminate 1.4s linear infinite;
+}
+@keyframes bd-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+body.vscode-reduce-motion .loading-bar::before { animation: none; width: 100%; }
+@media (prefers-reduced-motion: reduce) { .loading-bar::before { animation: none; width: 100%; } }
+.loading-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 440px;
+  padding: 12px 20px;
+  text-align: center;
+  pointer-events: auto;
+  border-radius: 4px;
+  background: var(--vscode-editorWidget-background, var(--bd-bg));
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-widget-border, transparent));
+  box-shadow: 0 2px 8px var(--bd-shadow);
+}
+body.vscode-high-contrast .loading-box { box-shadow: none; border-color: var(--vscode-contrastBorder); }
+.loading-text { margin-bottom: 0; }
+.loading-hint { margin: 10px 0 0; color: var(--bd-sec); line-height: 1.4; }
+#loading-cancel { margin-top: 10px; }
+
+body.vscode-high-contrast-light { --bd-dependency: var(--vscode-editorWarning-foreground, #895503); }
+@media (max-width: 560px) {
+  .hdr .meta { display: none; }
+  .hdr .title { max-width: 100%; }
+}

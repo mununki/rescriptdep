@@ -12,5 +12,12 @@
 		// "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
 		// "noFallthroughCasesInSwitch": true, /* Report errors for fallthrough cases in switch statement. */
 		// "noUnusedParameters": true,  /* Report errors on unused parameters. */
-	}
+	},
+	/* The webview is a browser bundle with its own config: src/webview/tsconfig.json */
+	"exclude": [
+		"node_modules",
+		"dist",
+		"out",
+		"src/webview"
+	]
 }

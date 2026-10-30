@@ -23,6 +23,9 @@ importers:
       '@typescript-eslint/parser':
         specifier: ^8.25.0
         version: 8.58.2(eslint@9.39.4)(typescript@5.9.3)
+      '@viz-js/viz':
+        specifier: 3.12.0
+        version: 3.12.0
       '@vscode/test-cli':
         specifier: ^0.0.10
         version: 0.0.10
@@ -359,6 +362,9 @@ packages:
   '@typescript-eslint/visitor-keys@8.58.2':
     resolution: {integrity: sha512-f1WO2Lx8a9t8DARmcWAUPJbu0G20bJlj8L4z72K00TMeJAoyLr/tHhI/pzYBLrR4dXWkcxO1cWYZEOX8DKHTqA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@viz-js/viz@3.12.0':
+    resolution: {integrity: sha512-Xca1HNJJYvoRzR3oKFX8eIl4fynNMupsp7s8bkyOcORuX+t416bxKFhplenWu5TliIgpW++5+0Yag/DzIxWYUQ==}
 
   '@vscode/test-cli@0.0.10':
     resolution: {integrity: sha512-B0mMH4ia+MOOtwNiLi79XhA+MLmUItIC8FckEuKrVAVriIuSWjt7vv4+bF8qVFiNFe4QRfzPaIZk39FZGWEwHA==}
@@ -1903,6 +1909,8 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.58.2
       eslint-visitor-keys: 5.0.1
+
+  '@viz-js/viz@3.12.0': {}
 
   '@vscode/test-cli@0.0.10':
     dependencies:

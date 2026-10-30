@@ -48,27 +48,147 @@
     "images/**/*",
     "package.json",
     "README.md",
-    "LICENSE.md"
+    "LICENSE.md",
+    "ThirdPartyNotices.txt"
   ],
   "contributes": {
     "commands": [
       {
         "command": "bibimbob.showDependencyGraph",
-        "title": "Bibimbob: Show Dependency Graph"
+        "title": "Show Dependency Graph",
+        "category": "Bibimbob"
       },
       {
         "command": "bibimbob.focusModuleDependencies",
-        "title": "Bibimbob: Focus On Module Dependencies"
+        "title": "Focus On Module Dependencies",
+        "category": "Bibimbob",
+        "icon": "$(type-hierarchy)"
       },
       {
         "command": "bibimbob.showUnusedModules",
-        "title": "Bibimbob: Show Unused Modules"
+        "title": "Show Unused Modules",
+        "category": "Bibimbob"
       },
       {
         "command": "bibimbob.toggleValueUsageCount",
-        "title": "Bibimbob: Toggle Value Usage Count"
+        "title": "Toggle Value Usage Count",
+        "category": "Bibimbob"
+      },
+      {
+        "command": "bibimbob.graph.openModule",
+        "title": "Open Module"
+      },
+      {
+        "command": "bibimbob.graph.focusModule",
+        "title": "Focus on Module"
+      },
+      {
+        "command": "bibimbob.graph.copyModuleName",
+        "title": "Copy Module Name"
+      },
+      {
+        "command": "bibimbob.graph.copyRelativePath",
+        "title": "Copy Relative Path"
+      },
+      {
+        "command": "bibimbob.graph.fitToView",
+        "title": "Fit to View"
+      },
+      {
+        "command": "bibimbob.graph.back",
+        "title": "Back"
+      },
+      {
+        "command": "bibimbob.graph.showFullGraph",
+        "title": "Show Full Graph"
       }
-    ]
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "bibimbob.focusModuleDependencies",
+          "when": "resourceExtname == .res",
+          "group": "navigation"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "bibimbob.graph.openModule",
+          "when": "webviewId == 'bibimbobVisualizer' && webviewSection == 'module' && bibimbobOpenable",
+          "group": "1_navigation@1"
+        },
+        {
+          "command": "bibimbob.graph.focusModule",
+          "when": "webviewId == 'bibimbobVisualizer' && webviewSection == 'module' && !bibimbobIsCenter",
+          "group": "1_navigation@2"
+        },
+        {
+          "command": "bibimbob.graph.copyModuleName",
+          "when": "webviewId == 'bibimbobVisualizer' && webviewSection == 'module'",
+          "group": "9_cutcopypaste@1"
+        },
+        {
+          "command": "bibimbob.graph.copyRelativePath",
+          "when": "webviewId == 'bibimbobVisualizer' && webviewSection == 'module' && bibimbobOpenable",
+          "group": "9_cutcopypaste@2"
+        },
+        {
+          "command": "bibimbob.graph.fitToView",
+          "when": "webviewId == 'bibimbobVisualizer' && webviewSection == 'canvas'",
+          "group": "1_view@1"
+        },
+        {
+          "command": "bibimbob.graph.back",
+          "when": "webviewId == 'bibimbobVisualizer' && webviewSection == 'canvas' && bibimbobCanGoBack",
+          "group": "2_navigation@1"
+        },
+        {
+          "command": "bibimbob.graph.showFullGraph",
+          "when": "webviewId == 'bibimbobVisualizer' && webviewSection == 'canvas' && bibimbobMode != 'full'",
+          "group": "2_navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "bibimbob.graph.openModule",
+          "when": "false"
+        },
+        {
+          "command": "bibimbob.graph.focusModule",
+          "when": "false"
+        },
+        {
+          "command": "bibimbob.graph.copyModuleName",
+          "when": "false"
+        },
+        {
+          "command": "bibimbob.graph.copyRelativePath",
+          "when": "false"
+        },
+        {
+          "command": "bibimbob.graph.fitToView",
+          "when": "false"
+        },
+        {
+          "command": "bibimbob.graph.back",
+          "when": "false"
+        },
+        {
+          "command": "bibimbob.graph.showFullGraph",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Bibimbob",
+      "properties": {
+        "bibimbob.valueUsageCount.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show how often the value bound on the cursor line (`let`/`and`) is used, as an inline `Used N times` note in `.res` files. **Bibimbob: Toggle Value Usage Count** switches this setting."
+        }
+      }
+    }
   },
   "screenshots": [
     {
@@ -94,21 +214,23 @@
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc --noEmit && tsc -p src/webview/tsconfig.json --noEmit",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "test:unit": "esbuild src/test/unit/*.test.ts --bundle --platform=node --format=cjs --target=node20 --outdir=out/unit --alias:vscode=./src/test/unit/stub/vscode.ts --loader:.dot=text --log-level=warning && node --test out/unit/*.test.js"
   },
   "devDependencies": {
-    "@types/vscode": "^1.96.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
+    "@types/vscode": "^1.96.0",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
-    "eslint": "^9.21.0",
-    "esbuild": "^0.25.0",
-    "npm-run-all": "^4.1.5",
-    "typescript": "^5.7.3",
+    "@viz-js/viz": "3.12.0",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1"
+    "@vscode/test-electron": "^2.4.1",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.21.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.7.3"
   }
 }

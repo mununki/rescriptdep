@@ -1,15 +1,35 @@
+// Integration smoke test, run in a real VS Code by `pnpm test` (`vscode-test`). Not part of CI;
+// the unit tests under `unit/` run with `pnpm run test:unit`.
 import * as assert from 'assert';
-
-// You can import and use all API from the 'vscode' module
-// as well as import your extension to test it
 import * as vscode from 'vscode';
-// import * as myExtension from '../../extension';
+
+const COMMANDS = [
+	'bibimbob.showDependencyGraph',
+	'bibimbob.focusModuleDependencies',
+	'bibimbob.showUnusedModules',
+	'bibimbob.toggleValueUsageCount',
+	'bibimbob.graph.openModule',
+	'bibimbob.graph.focusModule',
+	'bibimbob.graph.copyModuleName',
+	'bibimbob.graph.copyRelativePath',
+	'bibimbob.graph.fitToView',
+	'bibimbob.graph.back',
+	'bibimbob.graph.showFullGraph',
+];
 
 suite('Extension Test Suite', () => {
-	vscode.window.showInformationMessage('Start all tests.');
+	test('activates and registers every command', async () => {
+		const extension = vscode.extensions.getExtension('mununki.vscode-bibimbob');
+		assert.ok(extension, 'extension not found');
+		await extension.activate();
+		const registered = new Set(await vscode.commands.getCommands(true));
+		for (const id of COMMANDS) {
+			assert.ok(registered.has(id), `${id} is not registered`);
+		}
+	});
 
-	test('Sample test', () => {
-		assert.strictEqual(-1, [1, 2, 3].indexOf(5));
-		assert.strictEqual(-1, [1, 2, 3].indexOf(0));
+	test('graph commands without a panel are no-ops', async () => {
+		await vscode.commands.executeCommand('bibimbob.graph.back');
+		await vscode.commands.executeCommand('bibimbob.graph.focusModule', { panelId: 'nope', module: '../../etc/passwd' });
 	});
 });

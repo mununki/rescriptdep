@@ -87,6 +87,9 @@ jobs:
       - name: Type Check
         run: cd vscode-rescriptdep && pnpm run check-types
 
+      - name: Unit Tests
+        run: cd vscode-rescriptdep && pnpm run test:unit
+
       - name: Build
         run: cd vscode-rescriptdep && pnpm run package
 

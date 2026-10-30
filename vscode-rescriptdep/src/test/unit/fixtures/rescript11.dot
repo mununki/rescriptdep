@@ -1,0 +1,20 @@
+digraph dependencies {
+  rankdir=LR;
+  node [shape=box, style=filled, fillcolor=lightblue];
+
+  "App" [label="App", tooltip="/repo/test/rescript/src/app.res"];
+  "Comp0" [label="Comp0", tooltip="/repo/test/rescript/src/comp0.res"];
+  "Logger" [label="Logger", tooltip="/repo/test/rescript/src/logger.res"];
+  "Math" [label="Math", tooltip="/repo/test/rescript/src/math.res"];
+  "React" [label="React", tooltip="/repo/test/rescript/node_modules/@rescript/react/src"];
+  "ReactDOM" [label="ReactDOM", tooltip="/repo/test/rescript/node_modules/@rescript/react/src"];
+  "Utils" [label="Utils", tooltip="/repo/test/rescript/src/utils.res"];
+
+  "App" -> "Comp0";
+  "App" -> "Logger";
+  "App" -> "Math";
+  "App" -> "React";
+  "Comp0" -> "React";
+  "Comp0" -> "ReactDOM";
+  "Math" -> "Utils";
+}
