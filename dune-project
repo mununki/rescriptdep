@@ -17,7 +17,7 @@
 
 (package
  (name rescriptdep)
- (version 0.2.0)
+ (version 0.3.0)
  (synopsis "A dependency analyzer for ReScript modules")
  (description
   "A tool to analyze dependencies between ReScript modules using cmi files")

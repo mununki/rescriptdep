@@ -77,7 +77,7 @@ This extension provides several commands in the Command Palette (`Ctrl+Shift+P` 
 
 ## Release Notes
 
-### Unreleased
+### 0.10.0
 
 - Rebuilt the graph viewer with searchable module cards, dependency tracing, Back navigation, theme support, and local layout.
 - Added module and canvas context menus, keyboard navigation, and source-opening shortcuts.

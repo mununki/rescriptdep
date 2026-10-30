@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
+CLI 0.3.0 and Bibimbob extension 0.10.0.
+
 ### Changed
 - Reduced dependency analysis work with indexed graph traversal, memoized dependency lookups, and shared parsing work across output formats.
 - Rebuilt the VS Code graph viewer with local layout, search, tracing, Back navigation, accessible controls, context menus, and cancellable requests.
