@@ -86,6 +86,9 @@ Rather than keep a decoder for that single prerelease, rescriptdep skips it. Upg
 
 For detailed information about building the project, running tests, and contributing, please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+Maintainers can follow the [release procedure](CONTRIBUTING.md#releasing) for CLI
+publication through opam and Bibimbob publication to the extension registries.
+
 ### Quick Start for Development
 
 ```bash
