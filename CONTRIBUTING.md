@@ -157,6 +157,23 @@ release is complete when its `ocaml/opam-repository` PR has merged and the versi
 is available through the opam index. An extension release is complete when the
 new version is published to both VS Code Marketplace and Open VSX.
 
+### Merge release changes through a PR
+
+Release changes, including version bumps, generated metadata, changelogs,
+screenshots, and these publishing instructions, must reach `main` through a
+pull request. Do not push them directly to `main`.
+
+1. Create a branch from the current `origin/main`, make the release changes,
+   and run the relevant validation described below.
+2. Commit and push the branch, then open a PR targeting `main`. Describe the
+   intended versions, changes, and validation results.
+3. Check CI for the latest PR head, address failures and review feedback, and
+   merge the PR through GitHub after its checks pass.
+4. Fetch `origin/main` after the merge and verify it contains the intended
+   versions and release notes. Create release tags from that merged commit,
+   as shown below. A squash or rebase merge can change commit IDs, so do not
+   tag the old PR head.
+
 ### CLI: publish to opam
 
 Use **`opam publish`** to generate the repository metadata, checksums, and PR.
@@ -180,7 +197,8 @@ commits.
 
    ```bash
    CLI_VERSION=0.3.0
-   git tag -a "cli-v${CLI_VERSION}" -m "Release CLI ${CLI_VERSION}"
+   git fetch origin
+   git tag -a "cli-v${CLI_VERSION}" origin/main -m "Release CLI ${CLI_VERSION}"
    git push origin "cli-v${CLI_VERSION}"
    ```
 
@@ -281,7 +299,8 @@ procedure separately when releasing CLI changes.
 
    ```bash
    EXTENSION_VERSION=0.10.0
-   git tag -a "extension-v${EXTENSION_VERSION}" \
+   git fetch origin
+   git tag -a "extension-v${EXTENSION_VERSION}" origin/main \
      -m "Release Bibimbob ${EXTENSION_VERSION}"
    git push origin "extension-v${EXTENSION_VERSION}"
    ```
